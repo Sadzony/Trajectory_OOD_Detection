@@ -19,7 +19,7 @@ public class SmoothZFollow : MonoBehaviour
         offsetZ = transform.position.z - target.position.z;
     }
 
-    private void LateUpdate()
+    private void Update()
     {
         if (target == null) return;
 
@@ -27,10 +27,11 @@ public class SmoothZFollow : MonoBehaviour
 
         Vector3 desiredPosition = new Vector3(fixedX, fixedY, targetZ);
 
-        transform.position = Vector3.Lerp(
+        transform.position = desiredPosition;
+        /* Vector3.Lerp(
             transform.position,
             desiredPosition,
             smoothSpeed * Time.deltaTime
-        );
+        ); */
     }
 }
