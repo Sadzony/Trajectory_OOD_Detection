@@ -36,6 +36,18 @@ public class LaneDefinedMovement : MonoBehaviour
     public float GetMaxAcceleration() => maxAcceleration;
     public float GetHeading() => heading;
 
+    private void Start()
+    {
+        velocity = targetVelocity;
+        heading = transform.eulerAngles.y * Mathf.Deg2Rad;
+
+        behaviourState = BehaviourState.Cruise;
+    }
+
+    // ==================================================
+    // UPDATE LOOP
+    // ==================================================
+
     private void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
@@ -44,125 +56,127 @@ public class LaneDefinedMovement : MonoBehaviour
 
         UpdateBehaviourState();
 
-        float steering = ComputeSteering(dt);
+        Debug.Log(laneChangeTime);
 
-        ApplyBicycleModel(dt, steering);
+        if (behaviourState == BehaviourState.LaneChange)
+            FollowLaneChange(dt);
+
+        ApplyBicycle(dt);
     }
+
+    // ==================================================
+    // VELOCITY
+    // ==================================================
 
     private void HandleVelocity(float dt)
     {
-        float velocityError = targetVelocity - velocity;
+        float error = targetVelocity - velocity;
 
-        if (Mathf.Abs(velocityError) < 0.001f)
-        {
-            acceleration = 0f;
-            velocity = targetVelocity;
-            return;
-        }
-
-        acceleration = Mathf.Clamp(
-            velocityError / dt,
-            -maxAcceleration,
-            maxAcceleration);
-
+        acceleration = Mathf.Clamp(error / dt, -maxAcceleration, maxAcceleration);
         velocity += acceleration * dt;
     }
+
+    // ==================================================
+    // STATE TRANSITION
+    // ==================================================
 
     private void UpdateBehaviourState()
     {
         float lateralError =
             currentCentreLine.position.x - transform.position.x;
 
-        switch (behaviourState)
+        if (behaviourState == BehaviourState.Cruise &&
+            Mathf.Abs(lateralError) > laneAlignmentTolerance)
         {
-            case BehaviourState.Cruise:
+            behaviourState = BehaviourState.LaneChange;
 
-                if (Mathf.Abs(lateralError) > laneAlignmentTolerance)
-                {
-                    StartLaneChange();
-                }
-
-                break;
-
-            case BehaviourState.LaneChange:
-
-                // optional: allow external re-triggering if lane target changes
-                break;
+            laneChangeTime = 0f;
+            laneChangeStartX = transform.position.x;
+            laneChangeTargetX = currentCentreLine.position.x;
         }
     }
-    private void StartLaneChange()
+
+    // ==================================================
+    // LANE CHANGE (QUINTIC + CURVATURE CONSISTENT)
+    // ==================================================
+
+    private void FollowLaneChange(float dt)
     {
-        behaviourState = BehaviourState.LaneChange;
+        laneChangeTime += dt;
 
-        laneChangeTime = 0f;
+        float u = laneChangeTime / laneChangeDuration;
 
-        laneChangeStartX =
-            transform.position.x;
+        if (u >= 1f)
+        {
+            u = 1f;
+            behaviourState = BehaviourState.Cruise;
+        }
 
-        laneChangeTargetX =
-            currentCentreLine.position.x;
-    }
+        // ==================================================
+        // QUINTIC
+        // ==================================================
 
-    private float ComputeSteering(float dt)
-    {
-        float x = transform.position.x;
+        float s =
+            10f * u * u * u
+            - 15f * u * u * u * u
+            + 6f * u * u * u * u * u;
+
+        float ds =
+            30f * u * u
+            - 60f * u * u * u
+            + 30f * u * u * u * u;
+
+        float deltaX =
+            laneChangeTargetX - laneChangeStartX;
+
+        float xRef =
+            laneChangeStartX + deltaX * s;
+
+        float xDotRef =
+            (deltaX * ds) / laneChangeDuration;
+
+        // ==================================================
+        // CURVATURE (STATE CONSISTENT FIX)
+        // ==================================================
+
         float v = Mathf.Max(velocity, 0.01f);
 
-        if (behaviourState == BehaviourState.LaneChange)
-        {
-            laneChangeTime += dt;
+        float lateralVelocity =
+            velocity * Mathf.Sin(heading);
 
-            float u = laneChangeTime / laneChangeDuration;
+        float lateralVelocityError =
+            xDotRef - lateralVelocity;
 
-            if (u >= 1f)
-            {
-                u = 1f;
-                behaviourState = BehaviourState.Cruise;
-            }
+        float curvature =
+            (2f * lateralVelocityError) / (v * v);
 
-            float s =
-                10f * u * u * u
-                - 15f * u * u * u * u
-                + 6f * u * u * u * u * u;
+        // ==================================================
+        // STEERING
+        // ==================================================
 
-            float ds =
-                30f * u * u
-                - 60f * u * u * u
-                + 30f * u * u * u * u;
+        float steering =
+            Mathf.Atan(curvature * wheelbase);
 
-            float dds =
-                60f * u
-                - 180f * u * u
-                + 120f * u * u * u;
+        steering = Mathf.Clamp(
+            steering,
+            -maxSteeringAngle * Mathf.Deg2Rad,
+            maxSteeringAngle * Mathf.Deg2Rad);
 
-            float deltaX = laneChangeTargetX - laneChangeStartX;
-
-            float xDDotRef =
-                (deltaX * dds) /
-                (laneChangeDuration * laneChangeDuration);
-
-            float curvature =
-                xDDotRef / (v * v);
-
-            return Mathf.Atan(curvature * wheelbase);
-        }
-        else if (behaviourState == BehaviourState.Cruise)
-        {
-            float lateralError =
-                currentCentreLine.position.x - x;
-
-            return Mathf.Clamp(
-                lateralError * 0.5f,
-                -maxSteeringAngle * Mathf.Deg2Rad,
-                maxSteeringAngle * Mathf.Deg2Rad);
-        }
-        else return 0;
+        // store steering for bicycle step
+        currentSteering = steering;
     }
-    private void ApplyBicycleModel(float dt, float steering)
+
+    // ==================================================
+    // BICYCLE MODEL
+    // ==================================================
+
+    private float currentSteering;
+
+    private void ApplyBicycle(float dt)
     {
         heading +=
             (velocity / wheelbase)
-            * Mathf.Tan(steering)
+            * Mathf.Tan(currentSteering)
             * dt;
 
         float x = transform.position.x;
@@ -176,6 +190,7 @@ public class LaneDefinedMovement : MonoBehaviour
         transform.rotation = Quaternion.Euler(
             0f,
             heading * Mathf.Rad2Deg,
-            0f);
+            0f
+        );
     }
 }
