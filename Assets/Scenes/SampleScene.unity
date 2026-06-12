@@ -448,10 +448,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e16d62bd2188d74091380ebafd7f793, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  targetLongitudinalVelocity: 10
-  maxLongitudinalAcceleration: 3
+  targetVelocity: 10
+  maxAcceleration: 3
   laneChangeDuration: 2.5
-  laneAlignmentTolerance: 0.01
+  maxSteeringAngle: 30
   currentCentreLine: {fileID: 1908850707}
 --- !u!4 &1908850707 stripped
 Transform:

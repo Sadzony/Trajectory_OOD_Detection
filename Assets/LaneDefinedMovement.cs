@@ -3,179 +3,179 @@ using System.Collections.Generic;
 
 public class LaneDefinedMovement : MonoBehaviour
 {
-    // ----------------------------
-    // LONGITUDINAL MOTION
-    // ----------------------------
-    [Header("Longitudinal")]
-    [SerializeField] private float targetLongitudinalVelocity = 10f;
-    [SerializeField] private float maxLongitudinalAcceleration = 3f;
+    [SerializeField] private float targetVelocity = 10f;
+    [SerializeField] private float maxAcceleration = 3f;
+    [SerializeField] private float wheelbase = 2.5f;
+    [SerializeField] private float maxSteeringAngle = 30f;
+
+    [SerializeField] private float laneChangeDuration = 2.5f;
+    [SerializeField] private float laneAlignmentTolerance = 0.05f;
+
+    [SerializeField] private Transform currentCentreLine;
 
     private float velocity;
     private float acceleration;
-
-    // ----------------------------
-    // LATERAL MOTION
-    // ----------------------------
-    [Header("Lane Change")]
-    [SerializeField] private float laneChangeDuration = 2.5f;
-    [SerializeField] private float laneAlignmentTolerance = 0.05f;
-    [SerializeField] private Transform currentCentreLine;
-
-    //accessor functions
-    public float GetCurrentVelocity() => velocity;
-    public float GetCurrentAcceleration() => acceleration;
-    public float GetTargetVelocity() => targetLongitudinalVelocity;
-    public float GetMaxAcceleration() => maxLongitudinalAcceleration;
-    public float GetHeading() => heading;
-
-    private enum LateralState
-    {
-        Cruise,
-        LaneChange
-    }
-
-    private LateralState lateralState;
+    private float heading;
 
     private float laneChangeTime;
     private float laneChangeStartX;
     private float laneChangeTargetX;
 
-    // ----------------------------
-    // HEADING
-    // ----------------------------
-    private float heading;
-
-    // ----------------------------
-    // INIT
-    // ----------------------------
-    private void Start()
+    private enum BehaviourState
     {
-        velocity = targetLongitudinalVelocity;
-        heading = transform.eulerAngles.y * Mathf.Deg2Rad;
+        Cruise,
+        LaneChange
     }
+
+    private BehaviourState behaviourState;
+
+    //accessor functions
+    public float GetCurrentVelocity() => velocity;
+    public float GetCurrentAcceleration() => acceleration;
+    public float GetTargetVelocity() => targetVelocity;
+    public float GetMaxAcceleration() => maxAcceleration;
+    public float GetHeading() => heading;
 
     private void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
 
-        UpdateLongitudinal(dt);
-        UpdateLateralState();
-        UpdateLateralTrajectory(dt);
-        UpdateHeading();
+        HandleVelocity(dt);
+
+        UpdateBehaviourState();
+
+        float steering = ComputeSteering(dt);
+
+        ApplyBicycleModel(dt, steering);
     }
 
-    // =========================================================
-    // LONGITUDINAL (INDEPENDENT OF LATERAL)
-    // =========================================================
-    private void UpdateLongitudinal(float dt)
+    private void HandleVelocity(float dt)
     {
-        float error = targetLongitudinalVelocity - velocity;
+        float velocityError = targetVelocity - velocity;
 
-        acceleration = Mathf.Clamp(
-            error / dt,
-            -maxLongitudinalAcceleration,
-            maxLongitudinalAcceleration
-        );
-
-        velocity += acceleration * dt;
-
-        float dz = velocity * dt;
-
-        Vector3 pos = transform.position;
-        pos += new Vector3(0f, 0f, dz);
-
-        transform.position = pos;
-    }
-
-    // =========================================================
-    // STATE TRANSITIONS
-    // =========================================================
-    private void UpdateLateralState()
-    {
-        float lateralError = currentCentreLine.position.x - transform.position.x;
-
-        if (lateralState == LateralState.Cruise)
+        if (Mathf.Abs(velocityError) < 0.001f)
         {
-            if (Mathf.Abs(lateralError) > laneAlignmentTolerance)
-            {
-                StartLaneChange();
-            }
-        }
-    }
-
-    private void StartLaneChange()
-    {
-        lateralState = LateralState.LaneChange;
-
-        laneChangeTime = 0f;
-        laneChangeStartX = transform.position.x;
-        laneChangeTargetX = currentCentreLine.position.x;
-    }
-
-    // =========================================================
-    // LATERAL QUINTIC TRAJECTORY
-    // =========================================================
-    private void UpdateLateralTrajectory(float dt)
-    {
-        if (lateralState != LateralState.LaneChange)
-        {
-            // Cruise: lock to lane center
-            Vector3 pos = transform.position;
-            pos.x = currentCentreLine.position.x;
-            transform.position = pos;
-
+            acceleration = 0f;
+            velocity = targetVelocity;
             return;
         }
 
-        laneChangeTime += dt;
+        acceleration = Mathf.Clamp(
+            velocityError / dt,
+            -maxAcceleration,
+            maxAcceleration);
 
-        float u = laneChangeTime / laneChangeDuration;
-
-        if (u >= 1f)
-        {
-            u = 1f;
-            lateralState = LateralState.Cruise;
-        }
-
-        // Quintic smoothstep
-        float s =
-            10f * u * u * u
-            - 15f * u * u * u * u
-            + 6f * u * u * u * u * u;
-
-        float deltaX = laneChangeTargetX - laneChangeStartX;
-
-        float x = laneChangeStartX + deltaX * s;
-
-        Vector3 posFinal = transform.position;
-        posFinal.x = x;
-        transform.position = posFinal;
+        velocity += acceleration * dt;
     }
 
-    // =========================================================
-    // HEADING FROM TRAJECTORY
-    // =========================================================
-    private void UpdateHeading()
+    private void UpdateBehaviourState()
     {
-        float deltaX = laneChangeTargetX - laneChangeStartX;
+        float lateralError =
+            currentCentreLine.position.x - transform.position.x;
 
-        float u = Mathf.Clamp01(laneChangeTime / laneChangeDuration);
+        switch (behaviourState)
+        {
+            case BehaviourState.Cruise:
 
-        float ds =
-            30f * u * u
-            - 60f * u * u * u
-            + 30f * u * u * u * u;
+                if (Mathf.Abs(lateralError) > laneAlignmentTolerance)
+                {
+                    StartLaneChange();
+                }
 
-        float dxdt = (deltaX * ds) / laneChangeDuration;
+                break;
 
-        float dzdt = Mathf.Max(velocity, 0.0001f);
+            case BehaviourState.LaneChange:
 
-        heading = Mathf.Atan2(dxdt, dzdt);
+                // optional: allow external re-triggering if lane target changes
+                break;
+        }
+    }
+    private void StartLaneChange()
+    {
+        behaviourState = BehaviourState.LaneChange;
+
+        laneChangeTime = 0f;
+
+        laneChangeStartX =
+            transform.position.x;
+
+        laneChangeTargetX =
+            currentCentreLine.position.x;
+    }
+
+    private float ComputeSteering(float dt)
+    {
+        float x = transform.position.x;
+        float v = Mathf.Max(velocity, 0.01f);
+
+        if (behaviourState == BehaviourState.LaneChange)
+        {
+            laneChangeTime += dt;
+
+            float u = laneChangeTime / laneChangeDuration;
+
+            if (u >= 1f)
+            {
+                u = 1f;
+                behaviourState = BehaviourState.Cruise;
+            }
+
+            float s =
+                10f * u * u * u
+                - 15f * u * u * u * u
+                + 6f * u * u * u * u * u;
+
+            float ds =
+                30f * u * u
+                - 60f * u * u * u
+                + 30f * u * u * u * u;
+
+            float dds =
+                60f * u
+                - 180f * u * u
+                + 120f * u * u * u;
+
+            float deltaX = laneChangeTargetX - laneChangeStartX;
+
+            float xDDotRef =
+                (deltaX * dds) /
+                (laneChangeDuration * laneChangeDuration);
+
+            float curvature =
+                xDDotRef / (v * v);
+
+            return Mathf.Atan(curvature * wheelbase);
+        }
+        else if (behaviourState == BehaviourState.Cruise)
+        {
+            float lateralError =
+                currentCentreLine.position.x - x;
+
+            return Mathf.Clamp(
+                lateralError * 0.5f,
+                -maxSteeringAngle * Mathf.Deg2Rad,
+                maxSteeringAngle * Mathf.Deg2Rad);
+        }
+        else return 0;
+    }
+    private void ApplyBicycleModel(float dt, float steering)
+    {
+        heading +=
+            (velocity / wheelbase)
+            * Mathf.Tan(steering)
+            * dt;
+
+        float x = transform.position.x;
+        float z = transform.position.z;
+
+        x += velocity * Mathf.Sin(heading) * dt;
+        z += velocity * Mathf.Cos(heading) * dt;
+
+        transform.position = new Vector3(x, transform.position.y, z);
 
         transform.rotation = Quaternion.Euler(
             0f,
             heading * Mathf.Rad2Deg,
-            0f
-        );
+            0f);
     }
 }
