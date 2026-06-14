@@ -312,11 +312,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ce8ef7c6f4c687499129733ac6189f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  vehicleController: {fileID: 1653004206}
+  vehicleController: {fileID: 1653004210}
   centreLanes:
   - {fileID: 1908850707}
   sampleRate: 0.02
-  predictionDuration: 2.5
   lineRenderer: {fileID: 1329216787}
 --- !u!120 &1329216787
 LineRenderer:
@@ -436,7 +435,7 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6180000651077400697, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
   m_PrefabInstance: {fileID: 2917748266725509136}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1653004206
+--- !u!114 &1653004210
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -445,13 +444,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 1575210620}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0e16d62bd2188d74091380ebafd7f793, type: 3}
+  m_Script: {fileID: 11500000, guid: 8243de93ff9327b498da0151d174c02d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  targetVelocity: 10
-  maxAcceleration: 3
-  laneChangeDuration: 2.5
-  maxSteeringAngle: 30
+  targetLongitudinalVelocity: 10
+  maxLongitudinalAcceleration: 3
+  manouvreDuration: 2.5
+  laneAlignmentTolerance: 0.05
   currentCentreLine: {fileID: 1908850707}
 --- !u!4 &1908850707 stripped
 Transform:
@@ -471,12 +470,16 @@ PrefabInstance:
       value: Car
       objectReference: {fileID: 0}
     - target: {fileID: 6180000651077400697, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 2.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6180000651077400697, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
       propertyPath: m_LocalPosition.x
       value: -2.5
       objectReference: {fileID: 0}
     - target: {fileID: 6180000651077400697, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.6
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6180000651077400697, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
       propertyPath: m_LocalPosition.z
@@ -516,7 +519,7 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1653004206}
+      addedObject: {fileID: 1653004210}
   m_SourcePrefab: {fileID: 100100000, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
 --- !u!1001 &5163527306798713594
 PrefabInstance:
