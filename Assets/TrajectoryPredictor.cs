@@ -72,14 +72,16 @@ public class TrajectoryPredictor : MonoBehaviour
     {
         Trajectory resultTrajectory = new Trajectory();
 
+        Transform lane = centreLanes[0];
+
         float dt = sampleRate;
 
-        Vector3 pos = ObservedState.position;
+        Vector3 pos = new Vector3(lane.position.x, ObservedState.position.y, ObservedState.position.z);
 
         float velocity = ObservedState.velocity;
         float accel = ObservedState.acceleration;
 
-        Transform lane = centreLanes[0];
+        
 
         float heading = vehicleController.GetHeading();
 
@@ -143,6 +145,8 @@ public class TrajectoryPredictor : MonoBehaviour
     {
         Trajectory resultTrajectory = new Trajectory();
 
+        Transform lane = centreLanes[0];
+
         var lastLeadingState = leadingTrajectory.states[leadingTrajectory.states.Count - 1];
         var lastTrajectoryStates = leadingTrajectory.states.Where(s => s.t >= leadingTrajectory.trajectoryStart);
         foreach (var state in lastTrajectoryStates)
@@ -152,12 +156,12 @@ public class TrajectoryPredictor : MonoBehaviour
 
         float dt = sampleRate;
 
-        Vector3 pos = ObservedState.position;
+        Vector3 pos = new Vector3(lane.position.x, ObservedState.position.y, ObservedState.position.z);
 
         float velocity = ObservedState.velocity;
         float accel = ObservedState.acceleration;
 
-        Transform lane = centreLanes[0];
+
 
         float heading = vehicleController.GetHeading();
 

@@ -14,10 +14,14 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     // ----------------------------
     // LATERAL MOTION
     // ----------------------------
-    [Header("Lane Change")]
+    [Header("Lateral")]
     [SerializeField] private float manouvreDuration = 2.5f;
     [SerializeField] private float laneAlignmentTolerance = 0.05f;
+    [SerializeField] private float motionBias = 1f;
+    [SerializeField] private float cruiseOscillationPeriod = 5f;
+    [SerializeField] private float cruiseOscillationMagnitude = 0.05f;
     [SerializeField] private Transform currentCentreLine;
+    private float cruiseStartTime;
 
     private float heading;
 
@@ -54,6 +58,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     {
         velocity = targetLongitudinalVelocity;
         heading = transform.eulerAngles.y * Mathf.Deg2Rad;
+        cruiseStartTime = Time.time;
     }
 
     private void FixedUpdate()
@@ -123,35 +128,51 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
         {
             // Cruise: lock to lane center
             Vector3 pos = transform.position;
-            pos.x = currentCentreLine.position.x;
+
+            //oscillate within lane
+            float elapsed = Time.time - cruiseStartTime;
+
+            float phase =
+                (2f * Mathf.PI * elapsed)
+                / cruiseOscillationPeriod;
+
+            Debug.Log(phase);
+
+            float offset =
+                cruiseOscillationMagnitude * Mathf.Sin(phase);
+
+            pos.x = currentCentreLine.position.x + offset;
             transform.position = pos;
-
-            return;
         }
-
-        laneChangeTime += dt;
-
-        float u = laneChangeTime / manouvreDuration;
-
-        if (u >= 1f)
+        else
         {
-            u = 1f;
-            lateralState = LateralState.Cruise;
+            laneChangeTime += dt;
+
+            float u = laneChangeTime / manouvreDuration;
+
+            if (u >= 1f)
+            {
+                u = 1f;
+                cruiseStartTime = Time.time;
+                lateralState = LateralState.Cruise;
+            }
+
+            u = Mathf.Pow(u, 1f / motionBias);
+
+            // Quintic smoothstep
+            float s =
+                10f * u * u * u
+                - 15f * u * u * u * u
+                + 6f * u * u * u * u * u;
+
+            float deltaX = laneChangeTargetX - laneChangeStartX;
+
+            float x = laneChangeStartX + deltaX * s;
+
+            Vector3 posFinal = transform.position;
+            posFinal.x = x;
+            transform.position = posFinal;
         }
-
-        // Quintic smoothstep
-        float s =
-            10f * u * u * u
-            - 15f * u * u * u * u
-            + 6f * u * u * u * u * u;
-
-        float deltaX = laneChangeTargetX - laneChangeStartX;
-
-        float x = laneChangeStartX + deltaX * s;
-
-        Vector3 posFinal = transform.position;
-        posFinal.x = x;
-        transform.position = posFinal;
     }
 
     // =========================================================
