@@ -106,7 +106,7 @@ public class TrajectoryPredictor : MonoBehaviour
         t += dt;
         trajectoryTime += dt;
 
-        while (trajectoryTime + dt <= vehicleController.GetManouvreDuration() + 1e-5f)
+        while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
             velocity += accel * dt;
 
@@ -185,7 +185,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
         t += dt;
         trajectoryTime += dt;
-        while (trajectoryTime + dt <= vehicleController.GetManouvreDuration() + 1e-5f)
+        while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
             velocity += accel * dt;
 
