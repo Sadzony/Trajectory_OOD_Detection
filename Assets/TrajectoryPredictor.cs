@@ -34,10 +34,13 @@ public class TrajectoryPredictor : MonoBehaviour
 
     private float simulationTime;
 
+    private VehicleState ObservedState = new();
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         simulationTime = 0.0f;
+        ObservedState = ObserveVehicle();
         currentTrajectory = BuildLaneFollowTrajectory();
     }
 
@@ -45,11 +48,24 @@ public class TrajectoryPredictor : MonoBehaviour
     void FixedUpdate()
     {
         simulationTime += Time.fixedDeltaTime;
-        if(vehicleController.transform.position.z > currentTrajectory.states[currentTrajectory.states.Count - 1].position.z)
+        ObservedState = ObserveVehicle();
+        if (vehicleController.transform.position.z > currentTrajectory.states[currentTrajectory.states.Count - 1].position.z)
         {
             currentTrajectory = BuildLaneFollowTrajectory(currentTrajectory);
         }
         RenderTrajectory();
+    }
+
+    public VehicleState ObserveVehicle()
+    {
+        return new VehicleState
+        {
+            t = simulationTime,
+            velocity = vehicleController.GetCurrentVelocity(),
+            acceleration = vehicleController.GetCurrentAcceleration(),
+            heading = vehicleController.GetHeading(),
+            position = new Vector3(vehicleController.transform.position.x, vehicleController.transform.position.y, vehicleController.transform.position.z),
+        };
     }
 
     public Trajectory BuildLaneFollowTrajectory()
@@ -58,10 +74,10 @@ public class TrajectoryPredictor : MonoBehaviour
 
         float dt = sampleRate;
 
-        Vector3 pos = vehicleController.transform.position;
+        Vector3 pos = ObservedState.position;
 
-        float velocity = vehicleController.GetCurrentVelocity();
-        float accel = vehicleController.GetCurrentAcceleration();
+        float velocity = ObservedState.velocity;
+        float accel = ObservedState.acceleration;
 
         Transform lane = centreLanes[0];
 
@@ -71,15 +87,27 @@ public class TrajectoryPredictor : MonoBehaviour
         resultTrajectory.trajectoryStart = t;
         float trajectoryTime = 0f;
 
-        while (trajectoryTime < vehicleController.GetManouvreDuration())
+        //first point in the sequence, matching t = 0
+
+        // --- heading ---
+        float dxdt1 = (lane.position.x - pos.x) / dt;
+        float dzdt1 = Mathf.Max(velocity, 0.0001f);
+        heading = Mathf.Atan2(dxdt1, dzdt1);
+        // --- store sample ---
+        resultTrajectory.states.Add(new VehicleState
         {
-            // --- longitudinal motion ---
-            float targetV = vehicleController.GetTargetVelocity();
-            float maxA = vehicleController.GetMaxAcceleration();
+            t = t,
+            position = pos,
+            heading = heading,
+            velocity = velocity,
+            acceleration = accel
+        });
 
-            float error = targetV - velocity;
+        t += dt;
+        trajectoryTime += dt;
 
-            accel = Mathf.Clamp(error / dt, -maxA, maxA);
+        while (trajectoryTime + dt <= vehicleController.GetManouvreDuration() + 1e-5f)
+        {
             velocity += accel * dt;
 
             float dz = velocity * dt;
@@ -116,7 +144,6 @@ public class TrajectoryPredictor : MonoBehaviour
         Trajectory resultTrajectory = new Trajectory();
 
         var lastLeadingState = leadingTrajectory.states[leadingTrajectory.states.Count - 1];
-        leadingTrajectory.states.RemoveAt(leadingTrajectory.states.Count - 1);
         var lastTrajectoryStates = leadingTrajectory.states.Where(s => s.t >= leadingTrajectory.trajectoryStart);
         foreach (var state in lastTrajectoryStates)
         {
@@ -125,30 +152,41 @@ public class TrajectoryPredictor : MonoBehaviour
 
         float dt = sampleRate;
 
-        Vector3 pos = vehicleController.transform.position;
+        Vector3 pos = ObservedState.position;
 
-        float velocity = vehicleController.GetCurrentVelocity();
-        float accel = vehicleController.GetCurrentAcceleration();
+        float velocity = ObservedState.velocity;
+        float accel = ObservedState.acceleration;
 
         Transform lane = centreLanes[0];
 
         float heading = vehicleController.GetHeading();
 
-        
 
-        float t = lastLeadingState.t;
-        resultTrajectory.trajectoryStart = t;
+
+
+        resultTrajectory.trajectoryStart = simulationTime;
+        float t = resultTrajectory.trajectoryStart;
         float trajectoryTime = 0f;
+        //first point in the sequence, matching t = start
 
-        while (trajectoryTime < vehicleController.GetManouvreDuration())
+        // --- heading ---
+        float dxdt1 = (lane.position.x - pos.x) / dt;
+        float dzdt1 = Mathf.Max(velocity, 0.0001f);
+        heading = Mathf.Atan2(dxdt1, dzdt1);
+        // --- store sample ---
+        resultTrajectory.states.Add(new VehicleState
         {
-            // --- longitudinal motion ---
-            float targetV = vehicleController.GetTargetVelocity();
-            float maxA = vehicleController.GetMaxAcceleration();
+            t = t,
+            position = pos,
+            heading = heading,
+            velocity = velocity,
+            acceleration = accel
+        });
 
-            float error = targetV - velocity;
-
-            accel = Mathf.Clamp(error / dt, -maxA, maxA);
+        t += dt;
+        trajectoryTime += dt;
+        while (trajectoryTime + dt <= vehicleController.GetManouvreDuration() + 1e-5f)
+        {
             velocity += accel * dt;
 
             float dz = velocity * dt;
