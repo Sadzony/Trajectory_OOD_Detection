@@ -315,7 +315,8 @@ MonoBehaviour:
   vehicleController: {fileID: 1653004210}
   centreLanes:
   - {fileID: 1908850707}
-  sampleRate: 0.02
+  - {fileID: 9189951290191460299}
+  - {fileID: 9189951290191460298}
   lineRenderer: {fileID: 1329216787}
 --- !u!120 &1329216787
 LineRenderer:
@@ -449,10 +450,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   targetLongitudinalVelocity: 10
   maxLongitudinalAcceleration: 3
-  manouvreDuration: 2
-  laneAlignmentTolerance: 0.1
+  manouvreDuration: 2.5
+  laneAlignmentTolerance: 0.125
   motionBias: 1
+  cruiseOscillationPeriod: 10
+  cruiseOscillationMagnitude: 0
   currentCentreLine: {fileID: 1908850707}
+--- !u!114 &1653004211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1575210620}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3024dcc28469b30438a35b9e8b8d4e03, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LaneDefinedMovementBicycle
+  velocity: 10
+  targetVelocity: 10
+  maxAcceleration: 5
+  wheelBase: 2.5
+  maxSteerAngle: 30
+  laneChangeDuration: 2.5
+  currentLane: {fileID: 1908850707}
 --- !u!4 &1908850707 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3911108912262415966, guid: a85ed6e0d9c54a947924a17a929bfa84, type: 3}
@@ -521,6 +543,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1653004210}
+    - targetCorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1653004211}
   m_SourcePrefab: {fileID: 100100000, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
 --- !u!1001 &5163527306798713594
 PrefabInstance:
@@ -646,6 +671,16 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a85ed6e0d9c54a947924a17a929bfa84, type: 3}
+--- !u!4 &9189951290191460298 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4388554149655343203, guid: a85ed6e0d9c54a947924a17a929bfa84, type: 3}
+  m_PrefabInstance: {fileID: 9189951290191460297}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &9189951290191460299 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5934459977308793171, guid: a85ed6e0d9c54a947924a17a929bfa84, type: 3}
+  m_PrefabInstance: {fileID: 9189951290191460297}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

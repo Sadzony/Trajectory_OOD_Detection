@@ -136,8 +136,6 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
                 (2f * Mathf.PI * elapsed)
                 / cruiseOscillationPeriod;
 
-            Debug.Log(phase);
-
             float offset =
                 cruiseOscillationMagnitude * Mathf.Sin(phase);
 
