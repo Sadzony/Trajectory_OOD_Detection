@@ -5,6 +5,9 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     // ----------------------------
     // LONGITUDINAL MOTION
     // ----------------------------
+
+    [SerializeField] private float vehicleLength;
+
     [Header("Longitudinal")]
     [SerializeField] private float targetLongitudinalVelocity = 10f;
     [SerializeField] private float maxLongitudinalAcceleration = 3f;
@@ -36,6 +39,8 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     public float GetCurrentVelocity() => velocity;
     public float GetCurrentAcceleration() => acceleration;
     public float GetHeading() => heading;
+
+    public float GetVehicleLength() => vehicleLength;
 
     private enum LateralState
     {

@@ -20,10 +20,12 @@ public enum PredictionMode
 }
 public class Trajectory
 {
+    public Trajectory() { }
+    public Trajectory(Trajectory copy) { trajectoryStart = copy.trajectoryStart; Lane = copy.Lane; states = new List<VehicleState>(copy.states); followingTrajectory = copy.followingTrajectory; }
     public float trajectoryStart = 0.0f;
-    public Transform LaneFrom;
-    public Transform LaneTo;
+    public Transform Lane;
     public List<VehicleState> states = new();
+    public Trajectory? followingTrajectory = null;
 }
 
 public class TrajectoryPredictor : MonoBehaviour
@@ -67,11 +69,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
         var latestObservation = Observations[Observations.Count - 1];
 
-        //if trajectory has finished, set a new lane follow trajectory as the next one
-        if (vehicleController.transform.position.z > currentTrajectory.states[currentTrajectory.states.Count - 1].position.z)
-        {
-            currentTrajectory = BuildLaneFollowTrajectory(currentTrajectory, latestObservation);
-        }
+        currentTrajectory = UpdateTrajectory(currentTrajectory, latestObservation);
 
         //1. Update the set of transition Trajectories based on observed state
         TransitionTrajectories = FindTransitionTrajectories(latestObservation);
@@ -80,6 +78,26 @@ public class TrajectoryPredictor : MonoBehaviour
         currentTrajectory = SelectAlikeTrajectory(currentTrajectory, TransitionTrajectories, Observations);
 
         RenderTrajectory();
+    }
+
+    private Trajectory UpdateTrajectory(Trajectory trajectory, VehicleState Observation)
+    {
+        var resultTrajectory = new Trajectory(trajectory);
+
+        float dt = sampleRate;
+
+        //generate a following trajectory
+        if(trajectory.followingTrajectory == null)
+        {
+            resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(trajectory, trajectory.Lane, trajectory.states[^1]);
+        }
+        if(Observation.t >= trajectory.states[^1].t)
+        {
+            resultTrajectory = new Trajectory(resultTrajectory.followingTrajectory);
+            resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(resultTrajectory, resultTrajectory.Lane, resultTrajectory.states[^1]);
+        }
+
+        return resultTrajectory;
     }
 
     private Trajectory SelectAlikeTrajectory(Trajectory currentTrajectory, List<Trajectory> transitionTrajectories, List<VehicleState> Observations)
@@ -126,6 +144,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
                 float totalError = 0f;
                 int count = 0;
+                float halfLength = vehicleController.GetVehicleLength() / 2;
 
                 for (int i = obsCount - 1; i >= 0; i--)
                 {
@@ -134,10 +153,28 @@ public class TrajectoryPredictor : MonoBehaviour
                     if (trajIndex < 0)
                         break;
 
-                    totalError += Vector3.Distance(
-                        Observations[i].position,
-                        trajectory.states[trajIndex].position);
+                    VehicleState obs = Observations[i];
+                    VehicleState pred = trajectory.states[trajIndex];
 
+                    // --- forward vectors (heading in radians) ---
+                    Vector3 obsForward = new Vector3(Mathf.Sin(obs.heading), 0f, Mathf.Cos(obs.heading));
+                    Vector3 predForward = new Vector3(Mathf.Sin(pred.heading), 0f, Mathf.Cos(pred.heading));
+
+                    // --- front/rear points (OBS) ---
+                    Vector3 obsFront = obs.position + obsForward * halfLength;
+                    Vector3 obsRear = obs.position - obsForward * halfLength;
+
+                    // --- front/rear points (PRED) ---
+                    Vector3 predFront = pred.position + predForward * halfLength;
+                    Vector3 predRear = pred.position - predForward * halfLength;
+
+                    // --- rigid body error ---
+                    float frontError = Vector3.Distance(obsFront, predFront);
+                    float rearError = Vector3.Distance(obsRear, predRear);
+
+                    float error = (frontError + rearError) * 0.5f;
+
+                    totalError += error;
                     count++;
                 }
 
@@ -147,6 +184,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
                 if (ade < bestError)
                 {
+                    if(bestError != float.PositiveInfinity)
+                        Debug.Log("Found better: " + ade + " vs cuurrent: " + bestError);
                     bestError = ade;
                     bestTrajectory = trajectory;
                 }
@@ -158,7 +197,6 @@ public class TrajectoryPredictor : MonoBehaviour
     public List<Trajectory> FindTransitionTrajectories(VehicleState fromState)
     {
         float dt = sampleRate;
-
         //Filter out old trajectories
         float cutoffTime = fromState.t - vehicleController.GetManouvreDuration();
         TransitionTrajectories.RemoveAll(t => t.trajectoryStart < cutoffTime);
@@ -167,114 +205,82 @@ public class TrajectoryPredictor : MonoBehaviour
         var tolerance = sampleRate * 0.5f;
         var transitionStartState = currentTrajectory.states.Find(s => Mathf.Abs(s.t - fromState.t) < tolerance);
 
-        //Examine the current trajectory, using the FromLane and ToLane parameters to decide whether its a lane change or lane follow
-        bool isLaneFollow = currentTrajectory.LaneFrom == currentTrajectory.LaneTo;
 
-        // if its lane follow: append a lane follow with the new observed state, and a lane change to other lanes
-        if (isLaneFollow)
+        //1. create the same trajectory, updated with new observation
+        var timeWithinCurrent = fromState.t - currentTrajectory.trajectoryStart;
+        Transform lane = currentTrajectory.Lane;
+        var lastLeadingState = transitionStartState;
+        var lastTrajectoryStates = currentTrajectory.states.Where(s => s.t >= transitionStartState.t - vehicleController.GetManouvreDuration() && s.t <= transitionStartState.t);
+
+        if (timeWithinCurrent > 0)
         {
-            var newLaneFollowTrajectory = new Trajectory();
-            newLaneFollowTrajectory.LaneFrom = currentTrajectory.LaneFrom;
-            newLaneFollowTrajectory.LaneTo = currentTrajectory.LaneTo;
+            var differenceToManouvreDuration = vehicleController.GetManouvreDuration() - timeWithinCurrent;
 
-            var lastLeadingState = transitionStartState;
-            var lastTrajectoryStates = currentTrajectory.states.Where(s => s.t >= transitionStartState.t - vehicleController.GetManouvreDuration() && s.t < transitionStartState.t);
+            var observationUpdateTrajectory = new Trajectory();
+            observationUpdateTrajectory.Lane = currentTrajectory.Lane;
+
             foreach (var state in lastTrajectoryStates)
             {
-                newLaneFollowTrajectory.states.Add(state);
+                observationUpdateTrajectory.states.Add(state);
             }
-            Transform lane = newLaneFollowTrajectory.LaneTo;
 
-            var t = fromState.t;
-            newLaneFollowTrajectory.trajectoryStart = t;
+            observationUpdateTrajectory.trajectoryStart = currentTrajectory.trajectoryStart;
 
-            var followingLaneTrajectory = BuildLaneFollowTrajectory(lane, fromState);
-            foreach(var state in followingLaneTrajectory.states)
+            var updatedTraj =
+                BuildQuinticTrajectory(
+                    observationUpdateTrajectory.Lane,
+                    fromState,
+                    differenceToManouvreDuration);
+
+            var newStates = updatedTraj.states.Where(s => s.t > transitionStartState.t);
+            foreach (var state in newStates)
             {
-                newLaneFollowTrajectory.states.Add(state);
-            }
-            TransitionTrajectories.Add(newLaneFollowTrajectory);
-
-            int currentLaneIndex = centreLanes.IndexOf(lane);
-
-            for (int i = 0; i < centreLanes.Count; i++)
-            {
-                if (Mathf.Abs(i - currentLaneIndex) == 1)
-                {
-                    var laneCentre = centreLanes[i];
-
-                    var laneChangeTrajectory = new Trajectory();
-                    laneChangeTrajectory.LaneFrom = currentTrajectory.LaneFrom;
-                    laneChangeTrajectory.LaneTo = laneCentre;
-
-                    foreach (var state in lastTrajectoryStates)
-                    {
-                        laneChangeTrajectory.states.Add(state);
-                    }
-
-                    laneChangeTrajectory.trajectoryStart = fromState.t;
-
-                    var changingLaneTrajectory =
-                        BuildLaneChangeTrajectory(
-                            laneChangeTrajectory.LaneFrom,
-                            laneChangeTrajectory.LaneTo,
-                            fromState,
-                            vehicleController.GetManouvreDuration());
-
-                    foreach (var state in changingLaneTrajectory.states)
-                    {
-                        laneChangeTrajectory.states.Add(state);
-                    }
-
-                    TransitionTrajectories.Add(laneChangeTrajectory);
-                }
+                observationUpdateTrajectory.states.Add(state);
             }
 
-
+            TransitionTrajectories.Add(observationUpdateTrajectory);
         }
-        //if its lane change: append a lane change to the same lane with the new observed state
-        else if (!isLaneFollow)
+
+        //2. Create a state change trajectory, taking the full manouvre duration
+        int currentLaneIndex = centreLanes.IndexOf(lane);
+        for (int i = 0; i < centreLanes.Count; i++)
         {
-            // find the time we've spent within current trajectory
-            var timeWithinCurrent = fromState.t - currentTrajectory.trajectoryStart;
-            
-            if(timeWithinCurrent >= 0)
+            //act only on lanes which are 1 index away from this lane
+            if (Mathf.Abs(i - currentLaneIndex) == 1)
             {
-                var differenceToManouvreDuration = vehicleController.GetManouvreDuration() - timeWithinCurrent;
+                var laneCentre = centreLanes[i];
 
-                //first we need will create an updated trajectory with the new observations
-                var updatedLaneChangeTrajectory = new Trajectory();
-                updatedLaneChangeTrajectory.LaneFrom = currentTrajectory.LaneFrom;
-                updatedLaneChangeTrajectory.LaneTo = currentTrajectory.LaneTo;
+                var laneChangeTrajectory = new Trajectory();
+                laneChangeTrajectory.Lane = laneCentre;
 
-                var lastTrajectoryStates = currentTrajectory.states.Where(s => s.t >= transitionStartState.t - vehicleController.GetManouvreDuration() && s.t < transitionStartState.t);
                 foreach (var state in lastTrajectoryStates)
                 {
-                    updatedLaneChangeTrajectory.states.Add(state);
+                    laneChangeTrajectory.states.Add(state);
                 }
 
-                updatedLaneChangeTrajectory.trajectoryStart = currentTrajectory.trajectoryStart;
+                laneChangeTrajectory.trajectoryStart = transitionStartState.t;
 
                 var changingLaneTrajectory =
-                    BuildLaneChangeTrajectory(
-                        updatedLaneChangeTrajectory.LaneFrom,
-                        updatedLaneChangeTrajectory.LaneTo,
+                    BuildQuinticTrajectory(laneChangeTrajectory,
+                        laneCentre,
                         fromState,
-                        differenceToManouvreDuration);
-
-                foreach (var state in changingLaneTrajectory.states)
+                        vehicleController.GetManouvreDuration());
+                var newStates = changingLaneTrajectory.states.Where(s => s.t > transitionStartState.t);
+                foreach (var state in newStates)
                 {
-                    updatedLaneChangeTrajectory.states.Add(state);
+                    laneChangeTrajectory.states.Add(state);
                 }
 
-                TransitionTrajectories.Add(updatedLaneChangeTrajectory);
+                TransitionTrajectories.Add(laneChangeTrajectory);
             }
         }
+
         return TransitionTrajectories;
     }
 
     public List<VehicleState> ObserveVehicle()
     {
+        var newObservations = new List<VehicleState>(Observations);
         //generate current state
         var newState = new VehicleState
         {
@@ -288,19 +294,18 @@ public class TrajectoryPredictor : MonoBehaviour
         // Remove observations older than the manoeuvre duration
         float cutoffTime = simulationTime - vehicleController.GetManouvreDuration();
 
-        Observations.RemoveAll(state => state.t < cutoffTime);
+        newObservations.RemoveAll(state => state.t < cutoffTime);
 
         // Append newest observation
-        Observations.Add(newState);
-        return Observations;
+        newObservations.Add(newState);
+        return newObservations;
     }
 
     public Trajectory BuildLaneFollowTrajectory(Transform lane, VehicleState Observation)
     {
         Trajectory resultTrajectory = new Trajectory();
 
-        resultTrajectory.LaneFrom = lane;
-        resultTrajectory.LaneTo = lane;
+        resultTrajectory.Lane = lane;
 
         float dt = sampleRate;
 
@@ -369,14 +374,11 @@ public class TrajectoryPredictor : MonoBehaviour
         }
         return resultTrajectory;
     }
-    public Trajectory BuildLaneFollowTrajectory(Trajectory leadingTrajectory, VehicleState Observation)
+    public Trajectory BuildLaneFollowTrajectory(Trajectory leadingTrajectory, Transform Lane, VehicleState Observation)
     {
         Trajectory resultTrajectory = new Trajectory();
 
-        resultTrajectory.LaneFrom = leadingTrajectory.LaneTo;
-        resultTrajectory.LaneTo = resultTrajectory.LaneFrom;
-
-        Transform lane = resultTrajectory.LaneTo;
+        resultTrajectory.Lane = Lane;
 
         var lastLeadingState = leadingTrajectory.states[leadingTrajectory.states.Count - 1];
         var lastTrajectoryStates = leadingTrajectory.states.Where(s => s.t >= leadingTrajectory.trajectoryStart);
@@ -387,7 +389,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
         float dt = sampleRate;
 
-        Vector3 pos = new Vector3(lane.position.x, Observation.position.y, Observation.position.z);
+        Vector3 pos = new Vector3(Lane.position.x, Observation.position.y, Observation.position.z);
 
         float velocity = Observation.velocity;
         float accel = Observation.acceleration;
@@ -405,7 +407,7 @@ public class TrajectoryPredictor : MonoBehaviour
         //first point in the sequence, matching t = start
 
         // --- heading ---
-        float dxdt1 = (lane.position.x - pos.x) / dt;
+        float dxdt1 = (Lane.position.x - pos.x) / dt;
         float dzdt1 = Mathf.Max(velocity, 0.0001f);
         heading = Mathf.Atan2(dxdt1, dzdt1);
         // --- store sample ---
@@ -427,7 +429,7 @@ public class TrajectoryPredictor : MonoBehaviour
             float dz = velocity * dt;
 
             // Following the lane at a constant lateral position
-            float targetX = lane.position.x;
+            float targetX = Lane.position.x;
 
             pos.x = targetX;
             pos.z += dz;
@@ -454,12 +456,11 @@ public class TrajectoryPredictor : MonoBehaviour
         return resultTrajectory;
     }
 
-    private Trajectory BuildLaneChangeTrajectory(Transform LaneFrom, Transform LaneTo, VehicleState Observation, float duration)
+    public Trajectory BuildQuinticTrajectory(Transform Lane, VehicleState Observation, float duration)
     {
         Trajectory resultTrajectory = new Trajectory();
 
-        resultTrajectory.LaneFrom = LaneFrom;
-        resultTrajectory.LaneTo = LaneTo;
+        resultTrajectory.Lane = Lane;
 
         float dt = sampleRate;
 
@@ -476,7 +477,114 @@ public class TrajectoryPredictor : MonoBehaviour
         float trajectoryTime = 0f;
 
         float startX = Observation.position.x;
-        float targetX = LaneTo.position.x;
+        float targetX = Lane.position.x;
+        float deltaX = targetX - startX;
+
+        // First point (matches current observation)
+        float u = 0f;
+
+        float ds =
+            30f * u * u
+            - 60f * u * u * u
+            + 30f * u * u * u * u;
+
+        float dxdt = (deltaX * ds) / duration;
+        float dzdt = Mathf.Max(velocity, 0.0001f);
+
+        heading = Mathf.Atan2(dxdt, dzdt);
+
+        resultTrajectory.states.Add(new VehicleState
+        {
+            t = t,
+            position = pos,
+            heading = heading,
+            velocity = velocity,
+            acceleration = accel
+        });
+
+        t += dt;
+        trajectoryTime += dt;
+
+        while (trajectoryTime < duration)
+        {
+            // longitudinal motion
+            velocity += accel * dt;
+
+            float dz = velocity * dt;
+            pos.z += dz;
+
+            // lane-change progress
+            u = Mathf.Clamp01(
+                trajectoryTime / duration
+            );
+
+            // Quintic smoothstep
+            float s =
+                10f * u * u * u
+                - 15f * u * u * u * u
+                + 6f * u * u * u * u * u;
+
+            pos.x = startX + deltaX * s;
+
+            // heading from quintic derivative
+            ds =
+                30f * u * u
+                - 60f * u * u * u
+                + 30f * u * u * u * u;
+
+            dxdt =
+                (deltaX * ds)
+                / duration;
+
+            dzdt = Mathf.Max(velocity, 0.0001f);
+
+            heading = Mathf.Atan2(dxdt, dzdt);
+
+            resultTrajectory.states.Add(new VehicleState
+            {
+                t = t,
+                position = pos,
+                heading = heading,
+                velocity = velocity,
+                acceleration = accel
+            });
+
+            t += dt;
+            trajectoryTime += dt;
+        }
+
+        return resultTrajectory;
+    }
+
+    public Trajectory BuildQuinticTrajectory(Trajectory leadingTrajectory, Transform Lane, VehicleState Observation, float duration)
+    {
+        Trajectory resultTrajectory = new Trajectory();
+
+        resultTrajectory.Lane = Lane;
+
+        var lastLeadingState = leadingTrajectory.states[leadingTrajectory.states.Count - 1];
+        var lastTrajectoryStates = leadingTrajectory.states.Where(s => s.t >= leadingTrajectory.trajectoryStart);
+        foreach (var state in lastTrajectoryStates)
+        {
+            resultTrajectory.states.Add(state);
+        }
+
+        float dt = sampleRate;
+
+        Vector3 pos = lastLeadingState.position;
+
+        float velocity = Observation.velocity;
+        float accel = Observation.acceleration;
+
+        float heading = Observation.heading;
+
+        float t = lastLeadingState.t;
+        resultTrajectory.trajectoryStart = lastLeadingState.t;
+
+        float trajectoryTime = 0f;
+
+        float startX = lastLeadingState.position.x;
+        float targetX = Lane.position.x;
         float deltaX = targetX - startX;
 
         // First point (matches current observation)
@@ -560,11 +668,30 @@ public class TrajectoryPredictor : MonoBehaviour
         if (lineRenderer == null || currentTrajectory == null)
             return;
 
-        lineRenderer.positionCount = currentTrajectory.states.Count;
+        int mainCount = currentTrajectory.states.Count;
 
-        for (int i = 0; i < currentTrajectory.states.Count; i++)
+        int followCount =
+            currentTrajectory.followingTrajectory != null
+                ? currentTrajectory.followingTrajectory.states.Count
+                : 0;
+
+        lineRenderer.positionCount = mainCount + followCount;
+
+        // --- main trajectory ---
+        for (int i = 0; i < mainCount; i++)
         {
             lineRenderer.SetPosition(i, currentTrajectory.states[i].position);
+        }
+
+        // --- following trajectory ---
+        if (currentTrajectory.followingTrajectory != null)
+        {
+            var followStates = currentTrajectory.followingTrajectory.states;
+
+            for (int i = 0; i < followCount; i++)
+            {
+                lineRenderer.SetPosition(mainCount + i, followStates[i].position);
+            }
         }
     }
 }

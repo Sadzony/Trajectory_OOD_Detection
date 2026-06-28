@@ -317,6 +317,7 @@ MonoBehaviour:
   - {fileID: 1908850707}
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
+  predictionMode: 0
   lineRenderer: {fileID: 1329216787}
 --- !u!120 &1329216787
 LineRenderer:
@@ -448,6 +449,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8243de93ff9327b498da0151d174c02d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  vehicleLength: 4
   targetLongitudinalVelocity: 10
   maxLongitudinalAcceleration: 3
   manouvreDuration: 2.5
