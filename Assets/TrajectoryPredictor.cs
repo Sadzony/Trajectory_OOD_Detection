@@ -40,6 +40,9 @@ public class TrajectoryPredictor : MonoBehaviour
     [SerializeField] PredictionMode predictionMode;
     [SerializeField] bool predictFDE;
 
+    [Header("CUSUM")]
+    [SerializeField] float noiseTolerance = 0.2f;
+
     [Header("Debug")]
     [SerializeField] private LineRenderer lineRenderer;
 
@@ -124,7 +127,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
             return bestIndex;
         }
-
+        
         VehicleState latest = Observations[^1];
 
         float dt = sampleRate;
@@ -151,6 +154,7 @@ public class TrajectoryPredictor : MonoBehaviour
         var ObservationsWithExtraState = new List<VehicleState>(Observations);
         if(predictFDE)
             ObservationsWithExtraState.Add(predicted);
+        
 
         var potentialTrajectories = new List<Trajectory>(transitionTrajectories);
         potentialTrajectories.Insert(0, currentTrajectory);
@@ -230,10 +234,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
         //select the state in the current trajectory with the current simulation time - this is the starting point of the transition trajectories
         var tolerance = sampleRate * 0.5f;
-        var transitionStartState = currentTrajectory.states.Find(s => Mathf.Abs(s.t - fromState.t) < tolerance);
+        var transitionStartState = currentTrajectory.states.Find(s => Mathf.Abs(s.t - fromState.t) < tolerance && Mathf.Abs(s.position.z - fromState.position.z) < noiseTolerance);
 
-        var timeWithinCurrent = fromState.t - currentTrajectory.trajectoryStart;
-        var lastLeadingState = transitionStartState;
 
         Transform currentLane = currentTrajectory.LaneTo;
         //create a lane change trajectory, for every neighbouring lane
@@ -252,27 +254,22 @@ public class TrajectoryPredictor : MonoBehaviour
         if(currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
         {
             //create an updated trajectory for the same lane
-            if (timeWithinCurrent > 0)
+            var observationUpdateTrajectory = new Trajectory();
+
+            observationUpdateTrajectory.LaneFrom = currentTrajectory.LaneFrom;
+            observationUpdateTrajectory.LaneTo = currentTrajectory.LaneTo;
+            foreach (var state in lastTrajectoryStates)
             {
-                var differenceToManouvreDuration = vehicleController.GetManouvreDuration() - timeWithinCurrent;
-
-                var observationUpdateTrajectory = new Trajectory();
-
-                observationUpdateTrajectory.LaneFrom = currentTrajectory.LaneFrom;
-                observationUpdateTrajectory.LaneTo = currentTrajectory.LaneTo;
-                foreach (var state in lastTrajectoryStates)
-                {
-                    observationUpdateTrajectory.states.Add(state);
-                }
-
-                var updatedTraj = BuildLaneFollowTrajectory(observationUpdateTrajectory.LaneTo, fromState);
-                foreach (var state in updatedTraj.states)
-                {
-                    observationUpdateTrajectory.states.Add(state);
-                }
-                observationUpdateTrajectory.trajectoryStart = updatedTraj.trajectoryStart;
-                TransitionTrajectories.Add(observationUpdateTrajectory);
+                observationUpdateTrajectory.states.Add(state);
             }
+
+            var updatedTraj = BuildLaneFollowTrajectory(observationUpdateTrajectory.LaneTo, fromState);
+            foreach (var state in updatedTraj.states)
+            {
+                observationUpdateTrajectory.states.Add(state);
+            }
+            observationUpdateTrajectory.trajectoryStart = updatedTraj.trajectoryStart;
+            TransitionTrajectories.Add(observationUpdateTrajectory);
 
 
             for (int i = 0; i < centreLanes.Count; i++)
@@ -311,16 +308,13 @@ public class TrajectoryPredictor : MonoBehaviour
         else
         {
             //create an updated LaneChange trajectory
-            if (timeWithinCurrent > 0)
-            {
-                var updatedTraj = UpdateLaneChangeTrajectory(
-                        currentTrajectory,
-                        currentTrajectory.LaneFrom,
-                        currentTrajectory.LaneTo,
-                        fromState);
-                updatedTraj.followingTrajectory = null;
-                TransitionTrajectories.Add(updatedTraj);
-            }
+            var updatedTraj = UpdateLaneChangeTrajectory(
+                    currentTrajectory,
+                    currentTrajectory.LaneFrom,
+                    currentTrajectory.LaneTo,
+                    fromState);
+            updatedTraj.followingTrajectory = null;
+            TransitionTrajectories.Add(updatedTraj);
         }
 
         //append updated LaneFollow trajectories for every other lane, without history
@@ -375,7 +369,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
-        float velocity = Observation.velocity;
+        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax() + 10f);
         float accel = Observation.acceleration;
 
 
@@ -407,7 +402,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
         while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
-            velocity += accel * dt;
+            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
 
             float dz = velocity * dt;
 
@@ -456,7 +452,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
-        float velocity = Observation.velocity;
+        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
         float accel = Observation.acceleration;
 
 
@@ -473,7 +470,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
         // --- heading ---
         float dxdt1 = (Lane.position.x - pos.x) / dt;
-        float dzdt1 = Mathf.Max(velocity, 0.0001f);
+        float dzdt1 = Mathf.Max(velocity, 0.5f);
         heading = Mathf.Atan2(dxdt1, dzdt1);
         // --- store sample ---
         resultTrajectory.states.Add(new VehicleState
@@ -489,7 +486,8 @@ public class TrajectoryPredictor : MonoBehaviour
         trajectoryTime += dt;
         while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
-            velocity += accel * dt;
+            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
 
             float dz = velocity * dt;
 
@@ -501,7 +499,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
             // --- heading ---
             float dxdt = (targetX - pos.x) / dt;
-            float dzdt = Mathf.Max(velocity, 0.0001f);
+            float dzdt = Mathf.Max(velocity, 0.5f);
 
             heading = Mathf.Atan2(dxdt, dzdt);
 
@@ -532,7 +530,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = new Vector3(LaneFrom.position.x, 0, Observation.position.z);
 
-        float velocity = Observation.velocity;
+        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
         float accel = Observation.acceleration;
 
         float heading = Observation.heading;
@@ -576,7 +575,8 @@ public class TrajectoryPredictor : MonoBehaviour
         while (trajectoryTime < duration)
         {
             // longitudinal motion
-            velocity += accel * dt;
+            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
 
             float dz = velocity * dt;
             pos.z += dz;
@@ -631,7 +631,7 @@ public class TrajectoryPredictor : MonoBehaviour
         resultTrajectory.LaneFrom = LaneFrom;
         resultTrajectory.LaneTo = LaneTo;
 
-        var updateTrajectoryStates = updateTrajectory.states.Where(s => s.t < Observation.t);
+        var updateTrajectoryStates = updateTrajectory.states.Where(s => s.t < Observation.t && s.t > updateTrajectory.trajectoryStart);
 
         foreach (var state in updateTrajectoryStates)
         {
@@ -648,7 +648,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = updateStartState.position;
 
-        float velocity = Observation.velocity;
+        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
         float accel = Observation.acceleration;
 
         float heading = Observation.heading;
@@ -692,7 +693,8 @@ public class TrajectoryPredictor : MonoBehaviour
         while (trajectoryTime < duration)
         {
             // longitudinal motion
-            velocity += accel * dt;
+            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
 
             float dz = velocity * dt;
             pos.z += dz;
