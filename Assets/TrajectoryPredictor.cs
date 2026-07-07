@@ -72,6 +72,9 @@ public class TrajectoryPredictor : MonoBehaviour
 
         var latestObservation = Observations[Observations.Count - 1];
 
+        //generates a follow up trajectory if observations exceed current trajectory
+        currentTrajectory = UpdateTrajectory(currentTrajectory, latestObservation);
+
         //1. Update the set of transition Trajectories based on observed state
         TransitionTrajectories = FindTransitionTrajectories(latestObservation);
 
@@ -79,8 +82,6 @@ public class TrajectoryPredictor : MonoBehaviour
 
         //2 Transition to a different, or stay on current trajectory, based on error measure
         currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, TransitionTrajectories, Observations);
-
-        currentTrajectory = UpdateTrajectory(currentTrajectory, latestObservation);
 
         RenderTrajectory(currentTrajectory);
     }
@@ -96,7 +97,7 @@ public class TrajectoryPredictor : MonoBehaviour
         {
             resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(trajectory, trajectory.LaneTo, trajectory.states[^1]);
         }
-        if(Observation.t >= trajectory.states[^1].t)
+        if(Observation.t >= trajectory.states[^1].t && Observation.position.z > trajectory.states[^1].position.z)
         {
             resultTrajectory = new Trajectory(resultTrajectory.followingTrajectory);
             resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(resultTrajectory, resultTrajectory.LaneTo, resultTrajectory.states[^1]);
@@ -177,6 +178,10 @@ public class TrajectoryPredictor : MonoBehaviour
                 double error = (frontError + rearError) * 0.5;
 
                 totalError += error;
+                if(totalError>0.01)
+                {
+                    totalError = totalError;
+                }
                 count++;
             }
 
@@ -295,7 +300,6 @@ public class TrajectoryPredictor : MonoBehaviour
         float cutoffTime = fromState.t - vehicleController.GetManouvreDuration();
         TransitionTrajectories.RemoveAll(t => t.trajectoryStart < cutoffTime);
 
-        //select the state in the current trajectory with the current simulation time - this is the starting point of the transition trajectories
         var tolerance = sampleRate * 0.25f;
 
 
@@ -306,7 +310,10 @@ public class TrajectoryPredictor : MonoBehaviour
         List<VehicleState> lastTrajectoryStates;
         if (currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
         {
-            lastTrajectoryStates = currentTrajectory.states.Where(s => s.t >= fromState.t - vehicleController.GetManouvreDuration() && s.t + tolerance < fromState.t).ToList();
+            lastTrajectoryStates = currentTrajectory.states.Where(s =>
+                                                                s.t >= fromState.t - vehicleController.GetManouvreDuration() && 
+                                                                s.t + tolerance < fromState.t)
+                                                                .ToList();
         }
         else
         {
@@ -447,7 +454,7 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
         float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax() + 10f);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
 
@@ -480,7 +487,7 @@ public class TrajectoryPredictor : MonoBehaviour
         while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
             velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
 
@@ -530,7 +537,7 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
         float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
 
@@ -608,7 +615,7 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = new Vector3(LaneFrom.position.x, 0, Observation.position.z);
 
         float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
         float heading = Observation.heading;
@@ -653,7 +660,7 @@ public class TrajectoryPredictor : MonoBehaviour
         {
             // longitudinal motion
             velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
             pos.z += dz;
@@ -730,7 +737,7 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = updateStartState.position;
 
         float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
         float heading = Observation.heading;
@@ -775,7 +782,7 @@ public class TrajectoryPredictor : MonoBehaviour
         {
             // longitudinal motion
             velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
             pos.z += dz;

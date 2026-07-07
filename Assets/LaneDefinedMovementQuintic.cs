@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class LaneDefinedMovementQuintic : MonoBehaviour
@@ -6,29 +7,39 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
 
     [SerializeField] private float vehicleLength;
 
+    [Header("Behaviour")]
+    [SerializeField] private float minCruiseTimeChangeLane = 0.0f;
+    [SerializeField] private float maxCruiseTimeChangeLane = 6.0f;
+    private float timeSpentCruising = 0.0f;
+    private float nextLaneChangeTime;
+
     [Header("Longitudinal")]
     [SerializeField] private float targetLongitudinalVelocity = 20f;
     [SerializeField] private float maxLongitudinalAcceleration = 3f;
 
 
 
-    [SerializeField] public float speedLimitMinimum = 10f;
-    [SerializeField] public float speedLimitMaximum = 100f;
+    private float speedLimitMinimum = 10f;
+   private float speedLimitMaximum = 100f;
 
 
     [Header("Lateral")]
     [SerializeField] private float manouvreDuration = 2.5f;
     [SerializeField] private float laneAlignmentTolerance = 0.05f;
     [SerializeField] public Transform currentCentreLine;
-
+    [SerializeField] public List<Transform> centreLines;
 
     [Header("Lane Changing Noise")]
     [SerializeField] public float motionBias = 1f;
+    [SerializeField] private float motionBiasMin = 0.75f;
+    [SerializeField] private float motionBiasMax = 1.25f;
 
     [Header("Cruising Noise")]
     [SerializeField] private float cruiseOscillationPeriod = 5f;
     [SerializeField] private float cruiseOscillationMagnitude = 0.00f;
     private float cruiseStartTime;
+    private float currentCruiseOscillationMagnitude;
+    private float targetCruiseOscillationMagnitude;
 
 
     [Header("Braking")]
@@ -36,10 +47,23 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     [SerializeField] private float stopThreshold = 0.05f;
     private float laneChangeInitialVelocity;
 
-    private float heading;
+    [Header("Throttle Control")]
+    [SerializeField] private float coastingDeceleration = 1f;
+    [SerializeField] private float throttleOffBelowMin = 2f;
+    [SerializeField] private float throttleOffBelowMax = 6f;
+    [SerializeField] private float throttleOffAboveMin = 1f;
+    [SerializeField] private float throttleOffAboveMax = 4f;
 
-    private float velocity;
-    private float acceleration;
+    private bool throttlePressed = false;
+    private float throttleOnVelocity;
+    private float throttleOffVelocity;
+    private float previousTargetLongitudinalVelocity;
+
+    [Header("Current Values")]
+    [SerializeField] private float heading;
+
+    [SerializeField] private float velocity;
+    [SerializeField] private float acceleration;
 
     //accessor functions
     public float GetManouvreDuration() => manouvreDuration;
@@ -54,6 +78,11 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
 
     public float GetSpeedLimitMin() => speedLimitMinimum;
     public float GetSpeedLimitMax() => speedLimitMaximum;
+
+    public void SetTargetVelocity(float velocityMs)
+    {
+        targetLongitudinalVelocity = velocityMs;
+    }
 
     public enum LongitudinalState
     {
@@ -79,36 +108,82 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     private void Start()
     {
         velocity = targetLongitudinalVelocity;
+        previousTargetLongitudinalVelocity = targetLongitudinalVelocity;
+
+        speedLimitMinimum = targetLongitudinalVelocity - KilometresPerHourToMetresPerSecond(throttleOffBelowMax);
+        speedLimitMaximum = targetLongitudinalVelocity + KilometresPerHourToMetresPerSecond(throttleOffAboveMax);
+
         heading = transform.eulerAngles.y * Mathf.Deg2Rad;
         cruiseStartTime = Time.time;
+        currentCruiseOscillationMagnitude = cruiseOscillationMagnitude;
+        targetCruiseOscillationMagnitude = cruiseOscillationMagnitude;
 
         longitudinalState = LongitudinalState.Cruise;
+
+        nextLaneChangeTime = Random.Range(
+            minCruiseTimeChangeLane,
+            maxCruiseTimeChangeLane);
+
+        ChooseNextThrottleTargets();
     }
 
     private void FixedUpdate()
     {
+        speedLimitMinimum = targetLongitudinalVelocity - throttleOffBelowMax;
+        speedLimitMaximum = targetLongitudinalVelocity + throttleOffAboveMax;
+
         float dt = Time.fixedDeltaTime;
 
         UpdateLongitudinal(dt);
         UpdateLateralState();
         UpdateLateralTrajectory(dt);
         UpdateHeading();
+
+        if(longitudinalState == LongitudinalState.Cruise && lateralState == LateralState.Cruise)
+        {
+            PerformRandomLaneChanges(dt);
+        }
     }
 
 
     //longitudinal motion is independent from lateral trajectories - simple velocity controller
     private void UpdateLongitudinal(float dt)
     {
+        //check if our throttle targets are correct regarding target velocity
+        if (!Mathf.Approximately(targetLongitudinalVelocity, previousTargetLongitudinalVelocity))
+        {
+            ChooseNextThrottleTargets();
+            previousTargetLongitudinalVelocity = targetLongitudinalVelocity;
+        }
+
         switch (longitudinalState)
         {
             case LongitudinalState.Cruise:
                 {
-                    float error = targetLongitudinalVelocity - velocity;
+                    var brakingThreshold = throttleOffVelocity + KilometresPerHourToMetresPerSecond(5);
+                    if (velocity > brakingThreshold)
+                    {
+                        // Too fast: apply braking deceleration
+                        acceleration = -brakingDeceleration;
+                    }
 
-                    acceleration = Mathf.Clamp(
-                        error / dt,
-                        -maxLongitudinalAcceleration,
-                        maxLongitudinalAcceleration);
+                    // Kind of simulated Throttle control
+                    if (velocity <= throttleOnVelocity)
+                    {
+                        throttlePressed = true;
+                    }
+                    else if (velocity >= throttleOffVelocity)
+                    {
+                        throttlePressed = false;
+                        ChooseNextThrottleTargets();
+                    }
+
+                    acceleration = throttlePressed
+                        ? maxLongitudinalAcceleration
+                        : -coastingDeceleration;
+
+                    if (targetLongitudinalVelocity < 3)
+                        acceleration *= 0.2f;
 
                     break;
                 }
@@ -116,7 +191,6 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
             case LongitudinalState.Braking:
                 {
                     acceleration = -brakingDeceleration;
-
                     break;
                 }
 
@@ -181,6 +255,12 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
             Vector3 pos = transform.position;
 
             //oscillate within lane
+            currentCruiseOscillationMagnitude = Mathf.MoveTowards(
+                                            currentCruiseOscillationMagnitude,
+                                            targetCruiseOscillationMagnitude,
+                                            (0.1f) * dt);
+
+
             float elapsed = Time.time - cruiseStartTime;
 
             float phase =
@@ -188,7 +268,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
                 / cruiseOscillationPeriod;
 
             float offset =
-                cruiseOscillationMagnitude * Mathf.Sin(phase);
+                currentCruiseOscillationMagnitude * Mathf.Sin(phase);
 
             pos.x = currentCentreLine.position.x + offset;
             transform.position = pos;
@@ -267,11 +347,89 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     public void StartBraking()
     {
         if (longitudinalState != LongitudinalState.Stopped)
+        {
+            targetCruiseOscillationMagnitude = 0.0f;
             longitudinalState = LongitudinalState.Braking;
+        }
     }
 
     public void ResumeDriving()
     {
+        targetCruiseOscillationMagnitude = cruiseOscillationMagnitude;
         longitudinalState = LongitudinalState.Cruise;
     }
+
+    private void PerformRandomLaneChanges(float dt)
+    {
+        // Only count time while cruising laterally.
+        if (lateralState != LateralState.Cruise)
+        {
+            timeSpentCruising = 0f;
+            return;
+        }
+
+        timeSpentCruising += dt;
+
+        if (timeSpentCruising < nextLaneChangeTime)
+            return;
+
+        // Choose a neighbouring lane.
+        int currentIndex = centreLines.IndexOf(currentCentreLine);
+
+        List<int> possibleIndices = new List<int>();
+
+        if (currentIndex > 0)
+            possibleIndices.Add(currentIndex - 1);
+
+        if (currentIndex < centreLines.Count - 1)
+            possibleIndices.Add(currentIndex + 1);
+
+        if (possibleIndices.Count == 0)
+            return;
+
+        int chosenIndex = possibleIndices[Random.Range(0, possibleIndices.Count)];
+
+        currentCentreLine = centreLines[chosenIndex];
+
+        // Randomise lane-change profile.
+        if (Random.value < 0.5f)
+        {
+            // 50% chance of a slower profile
+            motionBias = Random.Range(motionBiasMin, 1f);
+        }
+        else
+        {
+            // 50% chance of a faster profile
+            motionBias = Random.Range(1f, motionBiasMax);
+        }
+
+        // Reset timer.
+        timeSpentCruising = 0f;
+        nextLaneChangeTime = Random.Range(
+            minCruiseTimeChangeLane,
+            maxCruiseTimeChangeLane);
+    }
+
+    private void ChooseNextThrottleTargets()
+    {
+        throttleOnVelocity =
+            targetLongitudinalVelocity -
+            Random.Range(KilometresPerHourToMetresPerSecond(throttleOffBelowMin), KilometresPerHourToMetresPerSecond(throttleOffBelowMax));
+
+        throttleOffVelocity =
+            targetLongitudinalVelocity +
+            Random.Range(KilometresPerHourToMetresPerSecond(throttleOffAboveMin), KilometresPerHourToMetresPerSecond(throttleOffAboveMax));
+    }
+
+
+    public float MetresPerSecondToKilometresPerHour(float metresPerSecond)
+    {
+        return metresPerSecond * 3.6f;
+    }
+
+    public float KilometresPerHourToMetresPerSecond(float kilometresPerHour)
+    {
+        return kilometresPerHour / 3.6f;
+    }
+
 }

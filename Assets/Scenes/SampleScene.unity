@@ -638,7 +638,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u200B"
+  m_text: "60\n\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1525,6 +1525,7 @@ GameObject:
   - component: {fileID: 993453359}
   - component: {fileID: 993453358}
   - component: {fileID: 993453357}
+  - component: {fileID: 993453360}
   m_Layer: 5
   m_Name: InputField (TMP)
   m_TagString: Untagged
@@ -1638,7 +1639,9 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: 
+  m_Text: '60
+
+'
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0
@@ -1691,6 +1694,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 993453355}
   m_CullTransparentMesh: 1
+--- !u!114 &993453360
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 993453355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 71bff6f6ba76b6449a28ea79c1c3fb0f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  inputField: {fileID: 993453357}
+  carBehaviour: {fileID: 1653004210}
 --- !u!1 &1067224397
 GameObject:
   m_ObjectHideFlags: 0
@@ -2731,18 +2748,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   vehicleLength: 4
-  targetLongitudinalVelocity: 10
+  minCruiseTimeChangeLane: 0.2
+  maxCruiseTimeChangeLane: 6
+  targetLongitudinalVelocity: 0
   maxLongitudinalAcceleration: 3
-  speedLimitMinimum: 10
-  speedLimitMaximum: 100
   manouvreDuration: 2.5
   laneAlignmentTolerance: 0.125
   currentCentreLine: {fileID: 1908850707}
+  centreLines:
+  - {fileID: 1908850707}
+  - {fileID: 9189951290191460299}
+  - {fileID: 9189951290191460298}
   motionBias: 1
+  motionBiasMin: 0.8
+  motionBiasMax: 1.4
   cruiseOscillationPeriod: 10
-  cruiseOscillationMagnitude: 0
+  cruiseOscillationMagnitude: 0.075
   brakingDeceleration: 8
   stopThreshold: 0.05
+  coastingDeceleration: 1
+  throttleOffBelowMin: 0
+  throttleOffBelowMax: 3
+  throttleOffAboveMin: 1
+  throttleOffAboveMax: 4
+  heading: 0
+  velocity: 0
+  acceleration: 0
   longitudinalState: 0
   lateralState: 0
 --- !u!1 &1653618892
@@ -2810,7 +2841,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1653618892}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
   m_Name: 
