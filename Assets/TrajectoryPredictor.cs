@@ -11,6 +11,8 @@ public class VehicleState
 
     public float velocity;
     public float acceleration;
+
+    public double? recordedCusum = null;
 }
 
 public enum PredictionMode
@@ -29,6 +31,13 @@ public class Trajectory
     public Trajectory? followingTrajectory = null;
 }
 
+public class TrajectoryRecord
+{
+    public Trajectory trajectory { get; set; }
+    public double error { get; set; }
+    public List<VehicleState> observations { get; set; }
+}
+
 public class TrajectoryPredictor : MonoBehaviour
 {
     [Header("References")]
@@ -41,7 +50,9 @@ public class TrajectoryPredictor : MonoBehaviour
     [SerializeField] bool predictFDE;
 
     [Header("CUSUM")]
-    [SerializeField] float noiseTolerance = 0.2f;
+    [SerializeField] double cusumNoiseAlignment = 0.2;
+    [SerializeField] double cumulativeErrorSum = 0.0;
+    [SerializeField] double OODThreshold = 2.0;
 
     [Header("Debug")]
     [SerializeField] private LineRenderer lineRenderer;
@@ -55,13 +66,24 @@ public class TrajectoryPredictor : MonoBehaviour
 
     public List<Trajectory> TransitionTrajectories = new List<Trajectory>();
 
+    float biggestError = 0.0f;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         simulationTime = 0.0f;
         Observations = ObserveVehicle();
         var latestObservation = Observations[Observations.Count - 1];
+
+        cumulativeErrorSum = 0.0f;
+
+
         currentTrajectory = BuildLaneFollowTrajectory(centreLanes[0], latestObservation);
+        currentTrajectory.states[0].recordedCusum = 0.0f;
+        TransitionTrajectories = FindTransitionTrajectories(latestObservation);
+
+
+        
     }
 
     // Update is called once per frame
@@ -80,8 +102,24 @@ public class TrajectoryPredictor : MonoBehaviour
 
         double currentTrajectoryError = FindErrorMeasure(currentTrajectory, Observations);
 
-        //2 Transition to a different, or stay on current trajectory, based on error measure
-        currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, TransitionTrajectories, Observations);
+        cumulativeErrorSum += currentTrajectoryError;
+        cumulativeErrorSum = System.Math.Max(0.0, cumulativeErrorSum - cusumNoiseAlignment);
+
+        VehicleState currentTrajectoryState =
+            FindClosestStateByTime(currentTrajectory.states, latestObservation.t);
+
+        currentTrajectoryState.recordedCusum = cumulativeErrorSum;
+
+        if (currentTrajectoryError > biggestError)
+        {
+            Debug.Log(currentTrajectoryError);
+            biggestError = (float)currentTrajectoryError;
+        }
+        if (currentTrajectoryError > 0)
+        {
+            //2 Transition to a different, or stay on current trajectory, based on error measure
+            currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, TransitionTrajectories, Observations);
+        }
 
         RenderTrajectory(currentTrajectory);
     }
@@ -97,7 +135,7 @@ public class TrajectoryPredictor : MonoBehaviour
         {
             resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(trajectory, trajectory.LaneTo, trajectory.states[^1]);
         }
-        if(Observation.t >= trajectory.states[^1].t && Observation.position.z > trajectory.states[^1].position.z)
+        if(Observation.position.z > trajectory.states[^1].position.z)
         {
             resultTrajectory = new Trajectory(resultTrajectory.followingTrajectory);
             resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(resultTrajectory, resultTrajectory.LaneTo, resultTrajectory.states[^1]);
@@ -178,16 +216,13 @@ public class TrajectoryPredictor : MonoBehaviour
                 double error = (frontError + rearError) * 0.5;
 
                 totalError += error;
-                if(totalError>0.01)
-                {
-                    totalError = totalError;
-                }
                 count++;
             }
 
             double ade = count > 0
                 ? totalError / count
                 : double.PositiveInfinity;
+
             return ade;
         }
         else
@@ -231,6 +266,10 @@ public class TrajectoryPredictor : MonoBehaviour
         double bestError = currentTrajectoryError;
         float tLatest = ObservationsWithExtraState[^1].t;
         int obsCount = ObservationsWithExtraState.Count;
+
+        bool runCusumSim = false;
+
+        var topRecords = new List<TrajectoryRecord>(3);
 
         if (predictionMode == PredictionMode.ADE)
         {
@@ -281,14 +320,48 @@ public class TrajectoryPredictor : MonoBehaviour
                     ? totalError / count
                     : float.PositiveInfinity;
 
+                // Track top 3 matches
+                topRecords.Add(new TrajectoryRecord
+                {
+                    trajectory = trajectory,
+                    error = ade,
+                    observations = new List<VehicleState>(ObservationsWithExtraState)
+                });
+
+                topRecords.Sort((a, b) => a.error.CompareTo(b.error));
+
+                if (topRecords.Count > 3)
+                    topRecords.RemoveAt(3);
+
+                
                 if (ade < bestError)
                 {
-                    if(bestError != double.PositiveInfinity)
-                        Debug.Log("Found better: " + ade + " vs cuurrent: " + bestError);
-                    bestError = ade;
-                    bestTrajectory = trajectory;
-                }
+                    runCusumSim = true;
+                } 
             }
+        }
+        if (runCusumSim)
+        {
+            /*
+            double bestCusum = double.PositiveInfinity;
+            foreach (var trajectory in topRecords)
+            {
+                foreach (var observation in trajectory.observations)
+                {
+                    //resimulate cusum from iterated observations
+
+                    //set bestTrajectory to the lowest one
+
+                    //set cusum values to the resimulated ones
+                }
+            }*/
+            bestTrajectory = topRecords[0].trajectory;
+        }
+        
+
+        if (bestTrajectory.followingTrajectory == null)
+        {
+            bestTrajectory.followingTrajectory = BuildLaneFollowTrajectory(bestTrajectory, bestTrajectory.LaneTo, bestTrajectory.states[^1]);
         }
         return bestTrajectory;
     }
@@ -303,16 +376,14 @@ public class TrajectoryPredictor : MonoBehaviour
         var tolerance = sampleRate * 0.25f;
 
 
-        Transform currentLane = currentTrajectory.LaneTo;
-        //create a lane change trajectory, for every neighbouring lane
-        int currentLaneIndex = centreLanes.IndexOf(currentLane);
+
 
         List<VehicleState> lastTrajectoryStates;
         if (currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
         {
             lastTrajectoryStates = currentTrajectory.states.Where(s =>
                                                                 s.t >= fromState.t - vehicleController.GetManouvreDuration() && 
-                                                                s.t + tolerance < fromState.t)
+                                                                s.position.z < fromState.position.z)
                                                                 .ToList();
         }
         else
@@ -322,6 +393,11 @@ public class TrajectoryPredictor : MonoBehaviour
         
         if(currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
         {
+            
+            Transform currentLane = currentTrajectory.LaneTo;
+            //create a lane change trajectory, for every neighbouring lane
+            int currentLaneIndex = centreLanes.IndexOf(currentLane);
+
             //create an updated trajectory for the same lane
             var observationUpdateTrajectory = new Trajectory();
 
@@ -338,7 +414,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 observationUpdateTrajectory.states.Add(state);
             }
             observationUpdateTrajectory.trajectoryStart = updatedTraj.trajectoryStart;
-            TransitionTrajectories.Add(observationUpdateTrajectory);
+            TransitionTrajectories.Add(observationUpdateTrajectory); 
 
 
             for (int i = 0; i < centreLanes.Count; i++)
@@ -888,4 +964,47 @@ public class TrajectoryPredictor : MonoBehaviour
 
         return bestIndex;
     }
+
+    private VehicleState FindClosestStateByTime(List<VehicleState> states, float targetTime)
+    {
+        int left = 0;
+        int right = states.Count - 1;
+
+        while (left <= right)
+        {
+            int mid = left + (right - left) / 2;
+
+            float midTime = states[mid].t;
+
+            if (Mathf.Approximately(midTime, targetTime))
+            {
+                return states[mid];
+            }
+            else if (midTime < targetTime)
+            {
+                left = mid + 1;
+            }
+            else
+            {
+                right = mid - 1;
+            }
+        }
+
+        // left is the first state after targetTime
+        // right is the last state before targetTime
+        if (left >= states.Count)
+            return states[^1];
+
+        if (right < 0)
+            return states[0];
+
+        // Pick whichever timestamp is closest
+        float leftDistance = Mathf.Abs(states[left].t - targetTime);
+        float rightDistance = Mathf.Abs(states[right].t - targetTime);
+
+        return leftDistance < rightDistance
+            ? states[left]
+            : states[right];
+    }
+
 }

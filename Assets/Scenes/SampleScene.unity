@@ -638,7 +638,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "60\n\u200B"
+  m_text: "60\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1639,9 +1639,7 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: '60
-
-'
+  m_Text: 60
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0
@@ -2029,7 +2027,9 @@ MonoBehaviour:
   - {fileID: 9189951290191460298}
   predictionMode: 0
   predictFDE: 0
-  noiseTolerance: 0.2
+  cusumNoiseAlignment: 0.20000000298023224
+  cumulativeErrorSum: 0
+  OODThreshold: 2
   lineRenderer: {fileID: 1329216787}
 --- !u!120 &1329216787
 LineRenderer:
@@ -2748,10 +2748,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   vehicleLength: 4
-  minCruiseTimeChangeLane: 0.2
-  maxCruiseTimeChangeLane: 6
+  minCruiseTimeChangeLane: 999
+  maxCruiseTimeChangeLane: 999
   targetLongitudinalVelocity: 0
-  maxLongitudinalAcceleration: 3
+  maxLongitudinalAcceleration: 1.5
   manouvreDuration: 2.5
   laneAlignmentTolerance: 0.125
   currentCentreLine: {fileID: 1908850707}
@@ -2760,13 +2760,15 @@ MonoBehaviour:
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
   motionBias: 1
-  motionBiasMin: 0.8
+  motionBiasMin: 0.85
   motionBiasMax: 1.4
+  oscillate: 0
   cruiseOscillationPeriod: 10
-  cruiseOscillationMagnitude: 0.075
+  cruiseOscillationMagnitude: 0.1
   brakingDeceleration: 8
   stopThreshold: 0.05
-  coastingDeceleration: 1
+  throttleNoiseOn: 0
+  coastingDeceleration: 0.5
   throttleOffBelowMin: 0
   throttleOffBelowMax: 3
   throttleOffAboveMin: 1

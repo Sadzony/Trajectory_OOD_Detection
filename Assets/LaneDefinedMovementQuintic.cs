@@ -19,7 +19,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
 
 
 
-    private float speedLimitMinimum = 10f;
+   private float speedLimitMinimum = 10f;
    private float speedLimitMaximum = 100f;
 
 
@@ -30,16 +30,23 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     [SerializeField] public List<Transform> centreLines;
 
     [Header("Lane Changing Noise")]
+    [SerializeField] public bool addMotionBias = false;
     [SerializeField] public float motionBias = 1f;
     [SerializeField] private float motionBiasMin = 0.75f;
     [SerializeField] private float motionBiasMax = 1.25f;
 
     [Header("Cruising Noise")]
+    [SerializeField] private bool oscillate = false;
     [SerializeField] private float cruiseOscillationPeriod = 5f;
-    [SerializeField] private float cruiseOscillationMagnitude = 0.00f;
+    [SerializeField] float cruiseOscillationMagnitude;
+
+
     private float cruiseStartTime;
+
+
     private float currentCruiseOscillationMagnitude;
-    private float targetCruiseOscillationMagnitude;
+    
+private float targetCruiseOscillationMagnitude;
 
 
     [Header("Braking")]
@@ -48,6 +55,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     private float laneChangeInitialVelocity;
 
     [Header("Throttle Control")]
+    [SerializeField] private bool throttleNoiseOn = false;
     [SerializeField] private float coastingDeceleration = 1f;
     [SerializeField] private float throttleOffBelowMin = 2f;
     [SerializeField] private float throttleOffBelowMax = 6f;
@@ -110,7 +118,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
         velocity = targetLongitudinalVelocity;
         previousTargetLongitudinalVelocity = targetLongitudinalVelocity;
 
-        speedLimitMinimum = targetLongitudinalVelocity - KilometresPerHourToMetresPerSecond(throttleOffBelowMax);
+        speedLimitMinimum = KilometresPerHourToMetresPerSecond(10.0f) - KilometresPerHourToMetresPerSecond(throttleOffBelowMax);
         speedLimitMaximum = targetLongitudinalVelocity + KilometresPerHourToMetresPerSecond(throttleOffAboveMax);
 
         heading = transform.eulerAngles.y * Mathf.Deg2Rad;
@@ -125,12 +133,13 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
             maxCruiseTimeChangeLane);
 
         ChooseNextThrottleTargets();
+        UpdateLongitudinal(0);
     }
 
     private void FixedUpdate()
     {
-        speedLimitMinimum = targetLongitudinalVelocity - throttleOffBelowMax;
-        speedLimitMaximum = targetLongitudinalVelocity + throttleOffAboveMax;
+        speedLimitMinimum = KilometresPerHourToMetresPerSecond(10.0f) - KilometresPerHourToMetresPerSecond(throttleOffBelowMax); ;
+        speedLimitMaximum = targetLongitudinalVelocity + KilometresPerHourToMetresPerSecond(throttleOffAboveMax);
 
         float dt = Time.fixedDeltaTime;
 
@@ -160,31 +169,42 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
         {
             case LongitudinalState.Cruise:
                 {
-                    var brakingThreshold = throttleOffVelocity + KilometresPerHourToMetresPerSecond(5);
-                    if (velocity > brakingThreshold)
+                    if (throttleNoiseOn)
                     {
-                        // Too fast: apply braking deceleration
-                        acceleration = -brakingDeceleration;
-                    }
+                        var brakingThreshold = throttleOffVelocity + KilometresPerHourToMetresPerSecond(5);
+                        if (velocity > brakingThreshold)
+                        {
+                            // Too fast: apply braking deceleration
+                            acceleration = -brakingDeceleration;
+                        }
 
-                    // Kind of simulated Throttle control
-                    if (velocity <= throttleOnVelocity)
+                        // Kind of simulated Throttle control
+                        if (velocity <= throttleOnVelocity)
+                        {
+                            throttlePressed = true;
+                        }
+                        else if (velocity >= throttleOffVelocity)
+                        {
+                            throttlePressed = false;
+                            ChooseNextThrottleTargets();
+                        }
+
+                        acceleration = throttlePressed
+                            ? maxLongitudinalAcceleration
+                            : -coastingDeceleration;
+
+                        if (targetLongitudinalVelocity < 3)
+                            acceleration *= 0.2f;
+                    }
+                    else
                     {
-                        throttlePressed = true;
+                        float error = targetLongitudinalVelocity - velocity;
+
+                        acceleration = Mathf.Clamp(
+                            float.IsNaN(error / dt) ? 0f : error / dt,
+                            -maxLongitudinalAcceleration,
+                            maxLongitudinalAcceleration);
                     }
-                    else if (velocity >= throttleOffVelocity)
-                    {
-                        throttlePressed = false;
-                        ChooseNextThrottleTargets();
-                    }
-
-                    acceleration = throttlePressed
-                        ? maxLongitudinalAcceleration
-                        : -coastingDeceleration;
-
-                    if (targetLongitudinalVelocity < 3)
-                        acceleration *= 0.2f;
-
                     break;
                 }
 
@@ -255,22 +275,25 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
             Vector3 pos = transform.position;
 
             //oscillate within lane
-            currentCruiseOscillationMagnitude = Mathf.MoveTowards(
-                                            currentCruiseOscillationMagnitude,
-                                            targetCruiseOscillationMagnitude,
-                                            (0.1f) * dt);
+            if (oscillate)
+            {
+                currentCruiseOscillationMagnitude = Mathf.MoveTowards(
+                                                currentCruiseOscillationMagnitude,
+                                                targetCruiseOscillationMagnitude,
+                                                (0.1f) * dt);
 
 
-            float elapsed = Time.time - cruiseStartTime;
+                float elapsed = Time.time - cruiseStartTime;
 
-            float phase =
-                (2f * Mathf.PI * elapsed)
-                / cruiseOscillationPeriod;
+                float phase =
+                    (2f * Mathf.PI * elapsed)
+                    / cruiseOscillationPeriod;
 
-            float offset =
-                currentCruiseOscillationMagnitude * Mathf.Sin(phase);
+                float offset =
+                    currentCruiseOscillationMagnitude * Mathf.Sin(phase);
 
-            pos.x = currentCentreLine.position.x + offset;
+                pos.x = currentCentreLine.position.x + offset;
+            }
             transform.position = pos;
         }
         else
@@ -402,6 +425,8 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
             // 50% chance of a faster profile
             motionBias = Random.Range(1f, motionBiasMax);
         }
+        if (!addMotionBias)
+            motionBias = 1.0f;
 
         // Reset timer.
         timeSpentCruising = 0f;
