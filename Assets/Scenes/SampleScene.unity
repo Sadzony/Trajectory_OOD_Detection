@@ -2748,8 +2748,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   vehicleLength: 4
-  minCruiseTimeChangeLane: 999
-  maxCruiseTimeChangeLane: 999
+  minCruiseTimeChangeLane: 1
+  maxCruiseTimeChangeLane: 6
   targetLongitudinalVelocity: 0
   maxLongitudinalAcceleration: 1.5
   manouvreDuration: 2.5
@@ -2759,6 +2759,7 @@ MonoBehaviour:
   - {fileID: 1908850707}
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
+  addMotionBias: 0
   motionBias: 1
   motionBiasMin: 0.85
   motionBiasMax: 1.4
