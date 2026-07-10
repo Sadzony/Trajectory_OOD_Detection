@@ -36,6 +36,8 @@ public class TrajectoryRecord
     public Trajectory trajectory { get; set; }
     public double error { get; set; }
     public List<VehicleState> observations { get; set; }
+
+    public int trajectoryAnchorIndex;
 }
 
 public class TrajectoryPredictor : MonoBehaviour
@@ -47,13 +49,12 @@ public class TrajectoryPredictor : MonoBehaviour
     [Header("Prediction")]
     private float sampleRate = 0.02f;
     [SerializeField] PredictionMode predictionMode;
-    [SerializeField] bool predictFDE;
 
     [Header("CUSUM")]
     [SerializeField] double cusumNoiseAlignment = 0.2;
     [SerializeField] double cumulativeErrorSum = 0.0;
     [SerializeField] double OODThreshold = 2.0;
-
+    [SerializeField] bool simulateCUSUMOnStateChange = false;
     [Header("Debug")]
     [SerializeField] private LineRenderer lineRenderer;
 
@@ -61,6 +62,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
     private float simulationTime;
 
+    
 
     public List<VehicleState> Observations = new List<VehicleState>();
 
@@ -74,12 +76,9 @@ public class TrajectoryPredictor : MonoBehaviour
         simulationTime = 0.0f;
         Observations = ObserveVehicle();
         var latestObservation = Observations[Observations.Count - 1];
-
         cumulativeErrorSum = 0.0f;
-
-
+        latestObservation.recordedCusum = cumulativeErrorSum;
         currentTrajectory = BuildLaneFollowTrajectory(centreLanes[0], latestObservation);
-        currentTrajectory.states[0].recordedCusum = 0.0f;
         TransitionTrajectories = FindTransitionTrajectories(latestObservation);
 
 
@@ -94,21 +93,22 @@ public class TrajectoryPredictor : MonoBehaviour
 
         var latestObservation = Observations[Observations.Count - 1];
 
+        
+
         //generates a follow up trajectory if observations exceed current trajectory
         currentTrajectory = UpdateTrajectory(currentTrajectory, latestObservation);
 
         //1. Update the set of transition Trajectories based on observed state
         TransitionTrajectories = FindTransitionTrajectories(latestObservation);
 
-        double currentTrajectoryError = FindErrorMeasure(currentTrajectory, Observations);
+        int currentTrajectoryAnchorIndex = FindClosestIndex(currentTrajectory.states, Observations[^1].t);
+        int currentTrajectoryMinIndex = FindClosestIndexLowest(currentTrajectory.states, Mathf.Max(0, Observations[^1].t - vehicleController.GetManouvreDuration()));
+        double currentTrajectoryError = FindErrorMeasure(currentTrajectory, currentTrajectoryAnchorIndex, currentTrajectoryMinIndex, Observations);
 
         cumulativeErrorSum += currentTrajectoryError;
         cumulativeErrorSum = System.Math.Max(0.0, cumulativeErrorSum - cusumNoiseAlignment);
 
-        VehicleState currentTrajectoryState =
-            FindClosestStateByTime(currentTrajectory.states, latestObservation.t);
-
-        currentTrajectoryState.recordedCusum = cumulativeErrorSum;
+        latestObservation.recordedCusum = cumulativeErrorSum;
 
         if (currentTrajectoryError > biggestError)
         {
@@ -117,8 +117,9 @@ public class TrajectoryPredictor : MonoBehaviour
         }
         if (currentTrajectoryError > 0)
         {
+            
             //2 Transition to a different, or stay on current trajectory, based on error measure
-            currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, TransitionTrajectories, Observations);
+            currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, currentTrajectoryAnchorIndex, TransitionTrajectories);
         }
 
         RenderTrajectory(currentTrajectory);
@@ -144,39 +145,17 @@ public class TrajectoryPredictor : MonoBehaviour
         return resultTrajectory;
     }
 
-    private double FindErrorMeasure(Trajectory trajectory, List<VehicleState> Observations)
+    private double FindErrorMeasure(Trajectory trajectory, int trajectoryAnchorIndex, int minIndex, List<VehicleState> Observations)
     {
         VehicleState latest = Observations[^1];
 
         float dt = sampleRate;
 
-        // Predict longitudinal motion
-        float predictedVelocity = latest.velocity + latest.acceleration * dt;
-        float averageVelocity = 0.5f * (latest.velocity + predictedVelocity);
-
-        // Heading assumed constant
-        Vector3 forward = new Vector3(
-            Mathf.Sin(latest.heading),
-            0f,
-            Mathf.Cos(latest.heading));
-
-        VehicleState predicted = new VehicleState
-        {
-            t = latest.t + dt,
-            heading = latest.heading,
-            velocity = predictedVelocity,
-            acceleration = latest.acceleration,
-            position = latest.position + forward * (averageVelocity * dt)
-        };
-
-        var ObservationsWithExtraState = new List<VehicleState>(Observations);
-        if (predictFDE)
-            ObservationsWithExtraState.Add(predicted);
-        float tLatest = ObservationsWithExtraState[^1].t;
-        int obsCount = ObservationsWithExtraState.Count;
+        float tLatest = Observations[^1].t;
+        int obsCount = Observations.Count;
 
         //error measure works off of the latest observation and works its way down the observation list
-        int anchorIndex = FindClosestIndex(trajectory.states, tLatest);
+        
 
         if (predictionMode == PredictionMode.ADE)
         {
@@ -189,12 +168,12 @@ public class TrajectoryPredictor : MonoBehaviour
 
             for (int i = obsCount - 1; i >= 0; i--)
             {
-                int trajIndex = anchorIndex - (obsCount - 1 - i);
+                int trajIndex = trajectoryAnchorIndex - (obsCount - 1 - i);
 
-                if (trajIndex < 0)
+                if (trajIndex < minIndex)
                     break;
 
-                VehicleState obs = ObservationsWithExtraState[i];
+                VehicleState obs = Observations[i];
                 VehicleState pred = trajectory.states[trajIndex];
 
                 // --- forward vectors (heading in radians) ---
@@ -231,45 +210,29 @@ public class TrajectoryPredictor : MonoBehaviour
         }
     }
 
-    private Trajectory SelectAlikeTrajectory(double currentTrajectoryError, List<Trajectory> transitionTrajectories, List<VehicleState> Observations)
+    private Trajectory SelectAlikeTrajectory(double currentTrajectoryError, int currentTrajectoryAnchorIndex, List<Trajectory> transitionTrajectories)
     {
         VehicleState latest = Observations[^1];
 
         float dt = sampleRate;
-
-        // Predict longitudinal motion
-        float predictedVelocity = latest.velocity + latest.acceleration * dt;
-        float averageVelocity = 0.5f * (latest.velocity + predictedVelocity);
-
-        // Heading assumed constant
-        Vector3 forward = new Vector3(
-            Mathf.Sin(latest.heading),
-            0f,
-            Mathf.Cos(latest.heading));
-
-        VehicleState predicted = new VehicleState
-        {
-            t = latest.t + dt,
-            heading = latest.heading,
-            velocity = predictedVelocity,
-            acceleration = latest.acceleration,
-            position = latest.position + forward * (averageVelocity * dt)
-        };
-
-        var ObservationsWithExtraState = new List<VehicleState>(Observations);
-        if(predictFDE)
-            ObservationsWithExtraState.Add(predicted);
         
 
         var potentialTrajectories = new List<Trajectory>(transitionTrajectories);
         Trajectory bestTrajectory = currentTrajectory;
         double bestError = currentTrajectoryError;
-        float tLatest = ObservationsWithExtraState[^1].t;
-        int obsCount = ObservationsWithExtraState.Count;
+        float tLatest = Observations[^1].t;
+        int obsCount = Observations.Count;
 
         bool runCusumSim = false;
 
-        var topRecords = new List<TrajectoryRecord>(3);
+        var topRecords = new List<TrajectoryRecord>();
+        var currentTrajectoryRecord = new TrajectoryRecord
+        {
+            trajectory = currentTrajectory,
+            error = bestError,
+            observations = new List<VehicleState>(Observations),
+            trajectoryAnchorIndex = currentTrajectoryAnchorIndex
+        };
 
         if (predictionMode == PredictionMode.ADE)
         {
@@ -279,6 +242,7 @@ public class TrajectoryPredictor : MonoBehaviour
                     continue;
 
                 int anchorIndex = FindClosestIndex(trajectory.states, tLatest);
+                int minIndex = FindClosestIndexLowest(trajectory.states, Mathf.Max(0, tLatest - vehicleController.GetManouvreDuration()));
 
                 double totalError = 0f;
                 int count = 0;
@@ -288,10 +252,10 @@ public class TrajectoryPredictor : MonoBehaviour
                 {
                     int trajIndex = anchorIndex - (obsCount - 1 - i);
 
-                    if (trajIndex < 0)
+                    if (trajIndex < minIndex)
                         break;
 
-                    VehicleState obs = ObservationsWithExtraState[i];
+                    VehicleState obs = Observations[i];
                     VehicleState pred = trajectory.states[trajIndex];
 
                     // --- forward vectors (heading in radians) ---
@@ -325,7 +289,8 @@ public class TrajectoryPredictor : MonoBehaviour
                 {
                     trajectory = trajectory,
                     error = ade,
-                    observations = new List<VehicleState>(ObservationsWithExtraState)
+                    observations = new List<VehicleState>(Observations),
+                    trajectoryAnchorIndex = anchorIndex,
                 });
 
                 topRecords.Sort((a, b) => a.error.CompareTo(b.error));
@@ -342,20 +307,105 @@ public class TrajectoryPredictor : MonoBehaviour
         }
         if (runCusumSim)
         {
-            /*
-            double bestCusum = double.PositiveInfinity;
-            foreach (var trajectory in topRecords)
+            if (simulateCUSUMOnStateChange)
             {
-                foreach (var observation in trajectory.observations)
+                //run the sim on the current record too.
+                topRecords.Add(currentTrajectoryRecord);
+
+                double bestFinalCusum = double.PositiveInfinity;
+                TrajectoryRecord? bestRecord = currentTrajectoryRecord;
+
+                foreach (var record in topRecords)
                 {
-                    //resimulate cusum from iterated observations
+                    // Find where this trajectory begins inside the observation history.
+                    int startObservationIndex = record.observations.FindIndex(o =>
+                        Mathf.Abs(o.t - record.trajectory.trajectoryStart) < sampleRate * 0.5f);
 
-                    //set bestTrajectory to the lowest one
+                    if (startObservationIndex < 0)
+                        startObservationIndex = 0;
 
-                    //set cusum values to the resimulated ones
+                    // Clone observations so we don't overwrite the real history yet.
+                    List<VehicleState> simulatedObservations = record.observations
+                        .Select(o => new VehicleState
+                        {
+                            t = o.t,
+                            position = o.position,
+                            heading = o.heading,
+                            velocity = o.velocity,
+                            acceleration = o.acceleration,
+                            recordedCusum = o.recordedCusum
+                        })
+                        .ToList();
+
+                    double cusum =
+                        simulatedObservations[startObservationIndex].recordedCusum ?? 0.0;
+
+                    int anchorIndex = record.trajectoryAnchorIndex;
+
+                    for (int obsIndex = simulatedObservations.Count - 1;
+                         obsIndex >= startObservationIndex;
+                         obsIndex--)
+                    {
+                        VehicleState obs = simulatedObservations[obsIndex];
+
+                        int minIndex = FindClosestIndexLowest(
+                            record.trajectory.states,
+                            Mathf.Max(0f, obs.t - vehicleController.GetManouvreDuration()));
+
+                        double error = FindErrorMeasure(
+                            record.trajectory,
+                            anchorIndex,
+                            minIndex,
+                            simulatedObservations.GetRange(startObservationIndex,
+                                obsIndex - startObservationIndex + 1));
+
+                        cusum += error;
+                        cusum = System.Math.Max(0.0, cusum - cusumNoiseAlignment);
+
+                        obs.recordedCusum = cusum;
+
+                        // Move trajectory anchor backwards one sample because
+                        // we're replaying backwards through time.
+                        anchorIndex--;
+                        if (anchorIndex < 0)
+                            break;
+                    }
+
+                    if (cusum < bestFinalCusum)
+                    {
+                        bestFinalCusum = cusum;
+
+                        bestRecord = new TrajectoryRecord
+                        {
+                            trajectory = record.trajectory,
+                            error = record.error,
+                            trajectoryAnchorIndex = record.trajectoryAnchorIndex,
+                            observations = simulatedObservations
+                        };
+                    }
                 }
-            }*/
-            bestTrajectory = topRecords[0].trajectory;
+
+                if (bestRecord != null)
+                {
+                    Observations = bestRecord.observations;
+                    cumulativeErrorSum = bestFinalCusum;
+                    bestTrajectory = bestRecord.trajectory;
+                }
+            }
+            else
+            {
+                var bestRecord = currentTrajectoryRecord;
+                var bestRecordError = currentTrajectoryRecord.error;
+                foreach (var record in topRecords)
+                {
+                    if(record.error < bestRecordError)
+                    {
+                        bestRecord = record;
+                        bestRecordError = record.error;
+                    }
+                }
+                bestTrajectory = bestRecord.trajectory;
+            }
         }
         
 
@@ -370,7 +420,7 @@ public class TrajectoryPredictor : MonoBehaviour
     {
         float dt = sampleRate;
         //Filter out old trajectories
-        float cutoffTime = fromState.t - vehicleController.GetManouvreDuration();
+        float cutoffTime = fromState.t - (vehicleController.GetManouvreDuration()/2);
         TransitionTrajectories.RemoveAll(t => t.trajectoryStart < cutoffTime);
 
         var tolerance = sampleRate * 0.25f;
@@ -383,7 +433,7 @@ public class TrajectoryPredictor : MonoBehaviour
         {
             lastTrajectoryStates = currentTrajectory.states.Where(s =>
                                                                 s.t >= fromState.t - vehicleController.GetManouvreDuration() && 
-                                                                s.position.z < fromState.position.z)
+                                                                s.position.z < fromState.position.z && s.t < fromState.t)
                                                                 .ToList();
         }
         else
@@ -473,6 +523,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 }
 
                 updatedTraj.followingTrajectory = null;
+                updatedTraj.trajectoryStart = fromState.t;
                 TransitionTrajectories.Add(updatedTraj);
             }
         }
@@ -509,7 +560,7 @@ public class TrajectoryPredictor : MonoBehaviour
         };
         // filter the observation buffer: remove all entries where VehicleState.t < simulationTime - ManouvreDuration
         // Remove observations older than the manoeuvre duration
-        float cutoffTime = simulationTime - vehicleController.GetManouvreDuration();
+        float cutoffTime = simulationTime - (2*vehicleController.GetManouvreDuration());
 
         newObservations.RemoveAll(state => state.t < cutoffTime);
 
@@ -529,7 +580,11 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
-        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        float velocity;
+        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
+            velocity = vehicleController.GetSpeedLimitMin();
+        else velocity = Observation.velocity;
+
         velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
@@ -562,7 +617,9 @@ public class TrajectoryPredictor : MonoBehaviour
 
         while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
-            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else velocity = velocity + (accel * dt);
             velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
@@ -612,7 +669,10 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
-        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        float velocity;
+        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
+            velocity = vehicleController.GetSpeedLimitMin();
+        else velocity = Observation.velocity;
         velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
@@ -646,8 +706,10 @@ public class TrajectoryPredictor : MonoBehaviour
         trajectoryTime += dt;
         while (trajectoryTime < vehicleController.GetManouvreDuration())
         {
-            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax()+10f);
+            if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else velocity = velocity + (accel * dt);
+            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
 
@@ -690,7 +752,10 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = new Vector3(LaneFrom.position.x, 0, Observation.position.z);
 
-        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        float velocity;
+        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
+            velocity = vehicleController.GetSpeedLimitMin();
+        else velocity = Observation.velocity;
         velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
@@ -735,7 +800,9 @@ public class TrajectoryPredictor : MonoBehaviour
         while (trajectoryTime < duration)
         {
             // longitudinal motion
-            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else velocity = velocity + (accel * dt);
             velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
@@ -791,7 +858,7 @@ public class TrajectoryPredictor : MonoBehaviour
         resultTrajectory.LaneFrom = LaneFrom;
         resultTrajectory.LaneTo = LaneTo;
 
-        var updateTrajectoryStates = updateTrajectory.states.Where(s => s.t < Observation.t && s.t > updateTrajectory.trajectoryStart);
+        var updateTrajectoryStates = updateTrajectory.states.Where(s => s.t < Observation.t && s.t >= updateTrajectory.trajectoryStart).ToList();
 
         foreach (var state in updateTrajectoryStates)
         {
@@ -812,7 +879,10 @@ public class TrajectoryPredictor : MonoBehaviour
 
         Vector3 pos = updateStartState.position;
 
-        float velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), Observation.velocity);
+        float velocity;
+        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
+            velocity = vehicleController.GetSpeedLimitMin();
+        else velocity = Observation.velocity;
         velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
@@ -857,7 +927,9 @@ public class TrajectoryPredictor : MonoBehaviour
         while (trajectoryTime < duration)
         {
             // longitudinal motion
-            velocity = Mathf.Max(vehicleController.GetSpeedLimitMin(), velocity + (accel * dt));
+            if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else velocity = velocity + (accel * dt);
             velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
@@ -945,7 +1017,29 @@ public class TrajectoryPredictor : MonoBehaviour
     int FindClosestIndex(List<VehicleState> states, float t)
     {
         int bestIndex = states.Count - 1;
-        float bestTimeDifference = float.MaxValue;
+        float bestTimeDifference = Mathf.Abs(states[states.Count-1].t - t);
+
+        for (int i = 0; i < states.Count; i++)
+        {
+            float timeDifference = Mathf.Abs(states[i].t - t);
+
+            if (timeDifference < bestTimeDifference)
+            {
+                bestTimeDifference = timeDifference;
+                bestIndex = i;
+            }
+            else if (states[i].t > t)
+            {
+                break;
+            }
+        }
+
+        return bestIndex;
+    }
+    int FindClosestIndexLowest(List<VehicleState> states, float t)
+    {
+        int bestIndex = 0;
+        float bestTimeDifference = Mathf.Abs(states[0].t - t);
 
         for (int i = 0; i < states.Count; i++)
         {

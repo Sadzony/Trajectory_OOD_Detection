@@ -15,7 +15,11 @@ public class SpeedInputController : MonoBehaviour
 
         //inputField.text = speedKmh.ToString();
         OnSpeedChanged(inputField.text);
-        inputField.onValueChanged.AddListener(OnSpeedChanged);
+        //inputField.onValueChanged.AddListener(OnSpeedChanged);
+    }
+    private void FixedUpdate()
+    {
+        OnSpeedChanged(inputField.text);
     }
 
     private void OnDestroy()
@@ -34,6 +38,11 @@ public class SpeedInputController : MonoBehaviour
 
         if (int.TryParse(value, out int speedKmh))
         {
+            if (speedKmh < 10)
+            {
+                speedKmh *= 10;
+                value = speedKmh.ToString();
+            }
             speedKmh = Mathf.Max(speedKmh, 10);
 
             updatingField = true;

@@ -15,7 +15,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
 
     [Header("Longitudinal")]
     [SerializeField] private float targetLongitudinalVelocity = 20f;
-    [SerializeField] private float maxLongitudinalAcceleration = 3f;
+
 
 
 
@@ -56,6 +56,7 @@ private float targetCruiseOscillationMagnitude;
 
     [Header("Throttle Control")]
     [SerializeField] private bool throttleNoiseOn = false;
+    [SerializeField] private float maxLongitudinalAcceleration = 3f;
     [SerializeField] private float coastingDeceleration = 1f;
     [SerializeField] private float throttleOffBelowMin = 2f;
     [SerializeField] private float throttleOffBelowMax = 6f;
@@ -177,33 +178,51 @@ private float targetCruiseOscillationMagnitude;
                             // Too fast: apply braking deceleration
                             acceleration = -brakingDeceleration;
                         }
-
-                        // Kind of simulated Throttle control
-                        if (velocity <= throttleOnVelocity)
+                        else
                         {
-                            throttlePressed = true;
-                        }
-                        else if (velocity >= throttleOffVelocity)
-                        {
-                            throttlePressed = false;
-                            ChooseNextThrottleTargets();
-                        }
 
-                        acceleration = throttlePressed
-                            ? maxLongitudinalAcceleration
-                            : -coastingDeceleration;
+                            // Kind of simulated Throttle control
+                            if (velocity <= throttleOnVelocity)
+                            {
+                                throttlePressed = true;
+                            }
+                            else if (velocity >= throttleOffVelocity)
+                            {
+                                throttlePressed = false;
+                                ChooseNextThrottleTargets();
+                            }
 
-                        if (targetLongitudinalVelocity < 3)
+                            acceleration = throttlePressed
+                                ? maxLongitudinalAcceleration
+                                : -coastingDeceleration;
+                        }
+                        float error = targetLongitudinalVelocity - velocity;
+
+                        if (targetLongitudinalVelocity < 3 && Mathf.Abs(error) < 3)
                             acceleration *= 0.2f;
+
                     }
                     else
                     {
                         float error = targetLongitudinalVelocity - velocity;
 
-                        acceleration = Mathf.Clamp(
-                            float.IsNaN(error / dt) ? 0f : error / dt,
-                            -maxLongitudinalAcceleration,
-                            maxLongitudinalAcceleration);
+                        
+                        var brakingThreshold = targetLongitudinalVelocity + KilometresPerHourToMetresPerSecond(5);
+                        //if (velocity > brakingThreshold)
+                        //{
+                            // Too fast: apply braking deceleration
+                        //    acceleration = Mathf.Clamp(
+                        //    float.IsNaN(error / dt) ? 0f : error / dt,
+                        //    -brakingDeceleration,
+                        //    brakingDeceleration);
+                        //}
+                        //else
+                        //{
+                            acceleration = Mathf.Clamp(
+                                float.IsNaN(error / dt) ? 0f : error / dt,
+                                -maxLongitudinalAcceleration,
+                                maxLongitudinalAcceleration);
+                        //}
                     }
                     break;
                 }

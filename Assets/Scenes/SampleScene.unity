@@ -2026,10 +2026,10 @@ MonoBehaviour:
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
   predictionMode: 0
-  predictFDE: 0
-  cusumNoiseAlignment: 0.20000000298023224
+  cusumNoiseAlignment: 0.35
   cumulativeErrorSum: 0
-  OODThreshold: 2
+  OODThreshold: 50
+  simulateCUSUMOnStateChange: 1
   lineRenderer: {fileID: 1329216787}
 --- !u!120 &1329216787
 LineRenderer:
@@ -2751,7 +2751,6 @@ MonoBehaviour:
   minCruiseTimeChangeLane: 1
   maxCruiseTimeChangeLane: 6
   targetLongitudinalVelocity: 0
-  maxLongitudinalAcceleration: 1.5
   manouvreDuration: 2.5
   laneAlignmentTolerance: 0.125
   currentCentreLine: {fileID: 1908850707}
@@ -2759,7 +2758,7 @@ MonoBehaviour:
   - {fileID: 1908850707}
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
-  addMotionBias: 0
+  addMotionBias: 1
   motionBias: 1
   motionBiasMin: 0.85
   motionBiasMax: 1.4
@@ -2768,8 +2767,9 @@ MonoBehaviour:
   cruiseOscillationMagnitude: 0.1
   brakingDeceleration: 8
   stopThreshold: 0.05
-  throttleNoiseOn: 0
-  coastingDeceleration: 0.5
+  throttleNoiseOn: 1
+  maxLongitudinalAcceleration: 3
+  coastingDeceleration: 1
   throttleOffBelowMin: 0
   throttleOffBelowMax: 3
   throttleOffAboveMin: 1
