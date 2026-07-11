@@ -29,6 +29,7 @@ public class Trajectory
     public Transform LaneTo;
     public List<VehicleState> states = new();
     public Trajectory? followingTrajectory = null;
+    public bool isLaneSettle = false;
 }
 
 public class TrajectoryRecord
@@ -93,13 +94,18 @@ public class TrajectoryPredictor : MonoBehaviour
 
         var latestObservation = Observations[Observations.Count - 1];
 
-        
+        bool transitions = true;
+        if (latestObservation.velocity < 0.1)
+        {
+            transitions = false;
+        }
 
         //generates a follow up trajectory if observations exceed current trajectory
         currentTrajectory = UpdateTrajectory(currentTrajectory, latestObservation);
 
         //1. Update the set of transition Trajectories based on observed state
-        TransitionTrajectories = FindTransitionTrajectories(latestObservation);
+        if(transitions && !currentTrajectory.isLaneSettle)
+            TransitionTrajectories = FindTransitionTrajectories(latestObservation);
 
         int currentTrajectoryAnchorIndex = FindClosestIndex(currentTrajectory.states, Observations[^1].t);
         int currentTrajectoryMinIndex = FindClosestIndexLowest(currentTrajectory.states, Mathf.Max(0, Observations[^1].t - vehicleController.GetManouvreDuration()));
@@ -115,7 +121,7 @@ public class TrajectoryPredictor : MonoBehaviour
             Debug.Log(currentTrajectoryError);
             biggestError = (float)currentTrajectoryError;
         }
-        if (currentTrajectoryError > 0)
+        if (currentTrajectoryError > 0 && transitions && !currentTrajectory.isLaneSettle)
         {
             
             //2 Transition to a different, or stay on current trajectory, based on error measure
@@ -138,7 +144,15 @@ public class TrajectoryPredictor : MonoBehaviour
         }
         if(Observation.position.z > trajectory.states[^1].position.z)
         {
-            resultTrajectory = new Trajectory(resultTrajectory.followingTrajectory);
+            if (trajectory.LaneFrom == trajectory.LaneTo)
+            {
+                resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(trajectory, trajectory.LaneTo, trajectory.states[^1]);
+            }
+            else
+            {
+                resultTrajectory.followingTrajectory = BuildLaneSettleTrajectory(trajectory, trajectory.LaneTo, Observation);
+            }
+            resultTrajectory = resultTrajectory.followingTrajectory;
             resultTrajectory.followingTrajectory = BuildLaneFollowTrajectory(resultTrajectory, resultTrajectory.LaneTo, resultTrajectory.states[^1]);
         }
 
@@ -420,7 +434,7 @@ public class TrajectoryPredictor : MonoBehaviour
     {
         float dt = sampleRate;
         //Filter out old trajectories
-        float cutoffTime = fromState.t - (vehicleController.GetManouvreDuration()/2);
+        float cutoffTime = fromState.t - (vehicleController.GetManouvreDuration());
         TransitionTrajectories.RemoveAll(t => t.trajectoryStart < cutoffTime);
 
         var tolerance = sampleRate * 0.25f;
@@ -523,7 +537,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 }
 
                 updatedTraj.followingTrajectory = null;
-                updatedTraj.trajectoryStart = fromState.t;
+                updatedTraj.trajectoryStart = updatedTrajResult.trajectoryStart;
                 TransitionTrajectories.Add(updatedTraj);
             }
         }
@@ -581,11 +595,9 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
         float velocity;
-        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
-            velocity = vehicleController.GetSpeedLimitMin();
-        else velocity = Observation.velocity;
+        velocity = Mathf.Max(Observation.velocity, vehicleController.GetSpeedLimitMin());
+        //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
 
@@ -620,7 +632,7 @@ public class TrajectoryPredictor : MonoBehaviour
             if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
                 velocity = vehicleController.GetSpeedLimitMin();
             else velocity = velocity + (accel * dt);
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+            //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
 
@@ -670,10 +682,8 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = new Vector3(Lane.position.x, 0, Observation.position.z);
 
         float velocity;
-        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
-            velocity = vehicleController.GetSpeedLimitMin();
-        else velocity = Observation.velocity;
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+        velocity = Mathf.Max(Observation.velocity, vehicleController.GetSpeedLimitMin());
+        //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
 
@@ -709,7 +719,7 @@ public class TrajectoryPredictor : MonoBehaviour
             if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
                 velocity = vehicleController.GetSpeedLimitMin();
             else velocity = velocity + (accel * dt);
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+            //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
 
@@ -753,10 +763,8 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = new Vector3(LaneFrom.position.x, 0, Observation.position.z);
 
         float velocity;
-        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
-            velocity = vehicleController.GetSpeedLimitMin();
-        else velocity = Observation.velocity;
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+        velocity = Mathf.Max(Observation.velocity, vehicleController.GetSpeedLimitMin());
+        //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
         float accel = Observation.acceleration;
 
         float heading = Observation.heading;
@@ -803,7 +811,7 @@ public class TrajectoryPredictor : MonoBehaviour
             if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
                 velocity = vehicleController.GetSpeedLimitMin();
             else velocity = velocity + (accel * dt);
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+            //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
             pos.z += dz;
@@ -880,10 +888,10 @@ public class TrajectoryPredictor : MonoBehaviour
         Vector3 pos = updateStartState.position;
 
         float velocity;
-        if (Observation.velocity < vehicleController.GetSpeedLimitMin())
-            velocity = vehicleController.GetSpeedLimitMin();
-        else velocity = Observation.velocity;
-        velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+        velocity = Mathf.Max(Observation.velocity, vehicleController.GetSpeedLimitMin());
+        //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+
+
         float accel = Observation.acceleration;
 
         float heading = Observation.heading;
@@ -930,7 +938,7 @@ public class TrajectoryPredictor : MonoBehaviour
             if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
                 velocity = vehicleController.GetSpeedLimitMin();
             else velocity = velocity + (accel * dt);
-            velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+            //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
 
             float dz = velocity * dt;
             pos.z += dz;
@@ -974,6 +982,121 @@ public class TrajectoryPredictor : MonoBehaviour
             t += dt;
             trajectoryTime += dt;
         }
+
+        return resultTrajectory;
+    }
+
+    public Trajectory BuildLaneSettleTrajectory(Trajectory leadingTrajectory, Transform Lane, VehicleState Observation)
+    {
+        Trajectory resultTrajectory = new Trajectory();
+
+        resultTrajectory.LaneFrom = Lane;
+        resultTrajectory.LaneTo = Lane;
+        resultTrajectory.isLaneSettle = true;
+
+        // Copy history from the leading trajectory
+        var lastTrajectoryStates = leadingTrajectory.states
+            .Where(s => s.t >= leadingTrajectory.trajectoryStart &&
+                        s.t + (sampleRate * 0.5f) < Observation.t)
+            .ToList();
+
+        foreach (var state in lastTrajectoryStates)
+        {
+            resultTrajectory.states.Add(state);
+        }
+
+        float dt = sampleRate;
+
+        Vector3 pos = Observation.position;
+
+        float velocity = Mathf.Max(
+            Observation.velocity,
+            vehicleController.GetSpeedLimitMin());
+
+        float accel = Observation.acceleration;
+        float heading = Observation.heading;
+
+        float t = Observation.t;
+        resultTrajectory.trajectoryStart = t;
+
+        float trajectoryTime = 0f;
+        float duration = 0.5f;
+
+        float startX = Observation.position.x;
+        float targetX = Lane.position.x;
+        float deltaX = targetX - startX;
+
+        // First point
+        float u = 0f;
+
+        float ds =
+            30f * u * u
+            - 60f * u * u * u
+            + 30f * u * u * u * u;
+
+        float dxdt = (deltaX * ds) / duration;
+        float dzdt = Mathf.Max(velocity, 0.0001f);
+
+        heading = Mathf.Atan2(dxdt, dzdt);
+
+        resultTrajectory.states.Add(new VehicleState
+        {
+            t = t,
+            position = pos,
+            heading = heading,
+            velocity = velocity,
+            acceleration = accel
+        });
+
+        t += dt;
+        trajectoryTime += dt;
+
+        while (trajectoryTime < duration)
+        {
+            // Longitudinal motion
+            if (velocity + accel * dt < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else
+                velocity += accel * dt;
+
+            pos.z += velocity * dt;
+
+            // Quintic interpolation
+            u = Mathf.Clamp01(trajectoryTime / duration);
+
+            float s =
+                10f * u * u * u
+                - 15f * u * u * u * u
+                + 6f * u * u * u * u * u;
+
+            pos.x = startX + deltaX * s;
+
+            ds =
+                30f * u * u
+                - 60f * u * u * u
+                + 30f * u * u * u * u;
+
+            dxdt = (deltaX * ds) / duration;
+            dzdt = Mathf.Max(velocity, 0.0001f);
+
+            heading = Mathf.Atan2(dxdt, dzdt);
+
+            resultTrajectory.states.Add(new VehicleState
+            {
+                t = t,
+                position = pos,
+                heading = heading,
+                velocity = velocity,
+                acceleration = accel
+            });
+
+            t += dt;
+            trajectoryTime += dt;
+        }
+
+        // Continue with normal lane following
+        resultTrajectory.followingTrajectory =
+            BuildLaneFollowTrajectory(resultTrajectory, Lane, resultTrajectory.states[^1]);
 
         return resultTrajectory;
     }

@@ -2026,7 +2026,7 @@ MonoBehaviour:
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
   predictionMode: 0
-  cusumNoiseAlignment: 0.35
+  cusumNoiseAlignment: 0.15
   cumulativeErrorSum: 0
   OODThreshold: 50
   simulateCUSUMOnStateChange: 1
@@ -2748,7 +2748,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   vehicleLength: 4
-  minCruiseTimeChangeLane: 1
+  minCruiseTimeChangeLane: 2.5
   maxCruiseTimeChangeLane: 6
   targetLongitudinalVelocity: 0
   manouvreDuration: 2.5
