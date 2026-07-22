@@ -2025,32 +2025,30 @@ MonoBehaviour:
   - {fileID: 1908850707}
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
-  predictionMode: 2
+  predictionMode: 1
   cusumNoiseAlignmentEuclidean: 0.15
-  cusumNoiseAlignmentEuclideanWhenNoisy: 0.05
-  cusumNoiseAlignmentLCSS: 0.015
-  cusumNoiseAlignmentLCSSWhenNoisy: 0.005
+  cusumNoiseAlignmentEuclideanWhenNoisy: 0.125
+  cusumNoiseAlignmentLCSS: 0.01
+  cusumNoiseAlignmentLCSSWhenNoisy: 0.125
   cumulativeErrorSum: 0
   OODThresholdEuclidean: 2
   OODThresholdLCSS: 0.2
-  lcssAcceptanceMagnitude: 0.1
   simulateCUSUMOnStateChange: 1
   lineRenderer: {fileID: 1329216787}
   inDistributionLine: {fileID: 2100000, guid: cb5a160bd7fe8f2468d3028094c43bc5, type: 2}
   oodLine: {fileID: 2100000, guid: 11d2007aef12f4449a041de0138e6d43, type: 2}
-  addObservationNoise: 0
-  changeNoiseDirectionPeriodMinimum: 0
-  changeNoiseDirectionPeriodMaximum: 1.5
+  addObservationNoise: 1
+  changeNoiseDirectionPeriod: 1
   maximumPositionNoiseMagnitude: 0.0005
   maximumVelocityNoiseMagnitude: 1
   maximumAccelerationNoiseMagnitude: 0.2
   maximumHeadingNoiseMagnitude: 1
-  addObservationAnomalies: 0
-  anomalyMinimumPositionMagnitude: 0.025
-  anomalyMaximumPositionMagnitude: 0.1
-  anomalyMaximumVelocityMagnitude: 3.5
-  anomalyMaximumAccelerationMagnitude: 1.25
-  anomalyMaximumHeadingMagnitude: 3.5
+  addObservationAnomalies: 1
+  anomalyMinimumPositionMagnitude: 0.1
+  anomalyMaximumPositionMagnitude: 0.25
+  anomalyMaximumVelocityMagnitude: 4
+  anomalyMaximumAccelerationMagnitude: 1
+  anomalyMaximumHeadingMagnitude: 5
   anomalyOccurancePeriodMinimum: 4
   anomalyOccurancePeriodMaximum: 7.5
 --- !u!120 &1329216787

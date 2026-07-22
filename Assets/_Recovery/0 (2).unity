@@ -2028,8 +2028,8 @@ MonoBehaviour:
   predictionMode: 2
   cusumNoiseAlignmentEuclidean: 0.15
   cusumNoiseAlignmentEuclideanWhenNoisy: 0.05
-  cusumNoiseAlignmentLCSS: 0.015
-  cusumNoiseAlignmentLCSSWhenNoisy: 0.005
+  cusumNoiseAlignmentLCSS: 0.01
+  cusumNoiseAlignmentLCSSWhenNoisy: 0.125
   cumulativeErrorSum: 0
   OODThresholdEuclidean: 2
   OODThresholdLCSS: 0.2
