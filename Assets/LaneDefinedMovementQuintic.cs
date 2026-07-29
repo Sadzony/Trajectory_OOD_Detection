@@ -36,7 +36,7 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
     [SerializeField] private float motionBiasMax = 1.25f;
 
     [Header("Cruising Noise")]
-    [SerializeField] private bool oscillate = false;
+    [SerializeField] public bool oscillate = false;
     [SerializeField] private float cruiseOscillationPeriod = 5f;
     [SerializeField] float cruiseOscillationMagnitude;
 
@@ -55,7 +55,7 @@ private float targetCruiseOscillationMagnitude;
     private float laneChangeInitialVelocity;
 
     [Header("Throttle Control")]
-    [SerializeField] private bool throttleNoiseOn = false;
+    [SerializeField] public bool throttleNoiseOn = false;
     [SerializeField] private float maxLongitudinalAcceleration = 3f;
     [SerializeField] private float coastingDeceleration = 1f;
     [SerializeField] private float throttleOffBelowMin = 2f;

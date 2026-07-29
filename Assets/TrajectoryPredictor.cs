@@ -45,23 +45,25 @@ public class TrajectoryRecord
 
 public class TrajectoryPredictor : MonoBehaviour
 {
+    public TMPro.TMP_InputField cusumValueField;
+    public TMPro.TMP_InputField errorValueField;
     [Header("References")]
     [SerializeField] private LaneDefinedMovementQuintic vehicleController;
     [SerializeField] private List<Transform> centreLanes;
 
     [Header("Prediction")]
     private float sampleRate = 0.02f;
-    [SerializeField] PredictionMode predictionMode;
+    [SerializeField] public PredictionMode predictionMode;
 
     [Header("CUSUM")]
-    [SerializeField] double cusumNoiseAlignmentEuclidean = 0.15;
-    [SerializeField] double cusumNoiseAlignmentEuclideanWhenNoisy = 0.125;
-    [SerializeField] double cusumNoiseAlignmentLCSS = 0.01;
-    [SerializeField] double cusumNoiseAlignmentLCSSWhenNoisy = 0.125;
+    [SerializeField] public double cusumNoiseAlignmentEuclidean = 0.15;
+    [SerializeField] public double cusumNoiseAlignmentEuclideanWhenNoisy = 0.05;
+    [SerializeField] public double cusumNoiseAlignmentLCSS = 0.015;
+    [SerializeField] public double cusumNoiseAlignmentLCSSWhenNoisy = 0.005;
     [SerializeField] double cumulativeErrorSum = 0.0;
-    [SerializeField] double OODThresholdEuclidean = 2.0;
-    [SerializeField] double OODThresholdLCSS = 0.2;
-    [SerializeField] private float lcssAcceptanceMagnitude = 0.1f;
+    [SerializeField] public double OODThresholdEuclidean = 2.0;
+    [SerializeField] public double OODThresholdLCSS = 0.2;
+    [SerializeField] public float lcssAcceptanceMagnitude = 0.15f;
     [SerializeField] bool simulateCUSUMOnStateChange = false;
     [Header("Debug")]
     [SerializeField] private LineRenderer lineRenderer;
@@ -69,7 +71,7 @@ public class TrajectoryPredictor : MonoBehaviour
     [SerializeField] private Material oodLine;
 
     [Header("Observation Noise")]
-    [SerializeField] private bool addObservationNoise = true;
+    [SerializeField] public bool addObservationNoise = true;
     [SerializeField] private float changeNoiseDirectionPeriodMinimum = 0.0f;
     [SerializeField] private float changeNoiseDirectionPeriodMaximum = 1.5f;
     [SerializeField] private float maximumPositionNoiseMagnitude = 0.035f;
@@ -77,7 +79,7 @@ public class TrajectoryPredictor : MonoBehaviour
     [SerializeField] private float maximumAccelerationNoiseMagnitude = 0.05f;
     [SerializeField] private float maximumHeadingNoiseMagnitude = 1.0f;
     [Header("Observation Anomalies")]
-    [SerializeField] private bool addObservationAnomalies = true;
+    [SerializeField] public bool addObservationAnomalies = true;
     [SerializeField] private float anomalyMinimumPositionMagnitude = 0.05f;
     [SerializeField] private float anomalyMaximumPositionMagnitude = 0.06f;
     [SerializeField] private float anomalyMaximumVelocityMagnitude = 0.02f;
@@ -155,9 +157,9 @@ public class TrajectoryPredictor : MonoBehaviour
 
             cumulativeErrorSum += currentTrajectoryError;
             if(predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE)
-                cumulativeErrorSum = System.Math.Max(0.0, addObservationNoise ? cumulativeErrorSum - cusumNoiseAlignmentEuclidean - cusumNoiseAlignmentEuclideanWhenNoisy : cumulativeErrorSum - cusumNoiseAlignmentEuclidean);
+                cumulativeErrorSum = System.Math.Max(0.0, addObservationNoise ? cumulativeErrorSum - cusumNoiseAlignmentEuclidean : cumulativeErrorSum - cusumNoiseAlignmentEuclidean);
             else if (predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal)
-                cumulativeErrorSum = System.Math.Max(0.0, addObservationNoise ? cumulativeErrorSum - cusumNoiseAlignmentLCSS - cusumNoiseAlignmentLCSSWhenNoisy : cumulativeErrorSum - cusumNoiseAlignmentLCSS);
+                cumulativeErrorSum = System.Math.Max(0.0, addObservationNoise ? cumulativeErrorSum - cusumNoiseAlignmentLCSS : cumulativeErrorSum - cusumNoiseAlignmentLCSS);
 
 
             latestObservation.recordedCusum = cumulativeErrorSum;
@@ -167,6 +169,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 Debug.Log(currentTrajectoryError);
                 biggestError = (float)currentTrajectoryError;
             }
+            errorValueField.text = currentTrajectoryError.ToString("F5");
             if (currentTrajectoryError > 0 && transitions && !currentTrajectory.isLaneSettle)
             {
 
@@ -188,7 +191,6 @@ public class TrajectoryPredictor : MonoBehaviour
                 //clear CUSUM
                 foreach (var obs in Observations)
                     obs.recordedCusum = null;
-
                 //fill out the first set of the trajectories to check if we get back in-distribution.
                 OODTransitionTrajectories = FindOODTransitionTrajectories(latestObservation);
 
@@ -271,6 +273,7 @@ public class TrajectoryPredictor : MonoBehaviour
         }
 
         RenderTrajectory(currentTrajectory);
+        cusumValueField.text = cumulativeErrorSum.ToString("F5");
     }
 
     private Trajectory UpdateTrajectory(Trajectory trajectory, VehicleState Observation)
@@ -949,9 +952,9 @@ public class TrajectoryPredictor : MonoBehaviour
 
                         cusum += error;
                         if (predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE)
-                            cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentEuclidean - cusumNoiseAlignmentEuclideanWhenNoisy : cusum - cusumNoiseAlignmentEuclidean);
+                            cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentEuclidean : cusum - cusumNoiseAlignmentEuclidean);
                         else if (predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal)
-                            cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentLCSS - cusumNoiseAlignmentLCSSWhenNoisy : cusum - cusumNoiseAlignmentLCSS);
+                            cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentLCSS : cusum - cusumNoiseAlignmentLCSS);
 
                         obs.recordedCusum = cusum;
 
@@ -1119,7 +1122,7 @@ public class TrajectoryPredictor : MonoBehaviour
             }
 
             //Continue Generating the keep lane trajectories for the original lane
-            /*
+            
             var lastTrajectoryStatesDuration = currentTrajectory.states.Where(s =>
                                                     s.t >= fromState.t - vehicleController.GetManouvreDuration() &&
                                                     s.position.z < fromState.position.z && s.t < fromState.t)
@@ -1139,7 +1142,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 keepLaneTrajectory.states.Add(state);
             }
             keepLaneTrajectory.trajectoryStart = fromState.t;
-            TransitionTrajectories.Add(keepLaneTrajectory); */
+            TransitionTrajectories.Add(keepLaneTrajectory); 
         }
 
         //append updated LaneFollow trajectories for every other lane, without history
@@ -2156,9 +2159,9 @@ public class TrajectoryPredictor : MonoBehaviour
             cusum += error;
 
             if (predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE)
-                cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentEuclidean - cusumNoiseAlignmentEuclideanWhenNoisy : cusum - cusumNoiseAlignmentEuclidean);
+                cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentEuclidean : cusum - cusumNoiseAlignmentEuclidean);
             else if (predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal)
-                cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentLCSS - cusumNoiseAlignmentLCSSWhenNoisy : cusum - cusumNoiseAlignmentLCSS);
+                cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentLCSS : cusum - cusumNoiseAlignmentLCSS);
 
 
             obs.recordedCusum = cusum;
