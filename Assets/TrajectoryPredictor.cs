@@ -1026,7 +1026,7 @@ public class TrajectoryPredictor : MonoBehaviour
         if (currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
         {
             lastTrajectoryStates = currentTrajectory.states.Where(s =>
-                                                                s.t >= fromState.t - vehicleController.GetManouvreDuration() && 
+                                                                s.t >= currentTrajectory.trajectoryStart - vehicleController.GetManouvreDuration() && 
                                                                 s.position.z < fromState.position.z && s.t < fromState.t)
                                                                 .ToList();
         }
@@ -1034,6 +1034,10 @@ public class TrajectoryPredictor : MonoBehaviour
         {
             lastTrajectoryStates = currentTrajectory.states.Where(s => s.t < currentTrajectory.trajectoryStart).ToList();
         }
+
+        if (lastTrajectoryStates.Count == 0 || fromState.velocity < vehicleController.GetSpeedLimitMin())
+            return TransitionTrajectories;
+        var latestState = lastTrajectoryStates[^1];
         
         if(currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
         {
@@ -1057,7 +1061,7 @@ public class TrajectoryPredictor : MonoBehaviour
             {
                 observationUpdateTrajectory.states.Add(state);
             }
-            observationUpdateTrajectory.trajectoryStart = updatedTraj.trajectoryStart;
+            observationUpdateTrajectory.trajectoryStart = latestState.t;
             TransitionTrajectories.Add(observationUpdateTrajectory); 
 
 
@@ -1078,7 +1082,7 @@ public class TrajectoryPredictor : MonoBehaviour
                         laneChangeTrajectory.states.Add(state);
                     }
 
-                    laneChangeTrajectory.trajectoryStart = fromState.t;
+                    laneChangeTrajectory.trajectoryStart = latestState.t;
 
                     var changingLaneTrajectory =
                         BuildLaneChangeTrajectory(laneChangeTrajectory.LaneFrom,
@@ -1117,23 +1121,40 @@ public class TrajectoryPredictor : MonoBehaviour
                 }
 
                 updatedTraj.followingTrajectory = null;
-                updatedTraj.trajectoryStart = updatedTrajResult.trajectoryStart;
+                updatedTraj.trajectoryStart = latestState.t;
                 TransitionTrajectories.Add(updatedTraj);
             }
 
             //Continue Generating the keep lane trajectories for the original lane
-            
-            var lastTrajectoryStatesDuration = currentTrajectory.states.Where(s =>
-                                                    s.t >= fromState.t - vehicleController.GetManouvreDuration() &&
-                                                    s.position.z < fromState.position.z && s.t < fromState.t)
-                                                    .ToList();
+           
             var keepLaneTrajectory = new Trajectory();
+
+            var lastTrajectoryStatesDuration = currentTrajectory.states
+                .Where(s =>
+                    s.t >= fromState.t - vehicleController.GetManouvreDuration() &&
+                    s.position.z < fromState.position.z &&
+                    s.t < currentTrajectory.trajectoryStart)
+                .ToList();
+
+            if (lastTrajectoryStatesDuration.Count > 0)
+            {
+                VehicleState lastState = lastTrajectoryStatesDuration[^1];
+
+                lastTrajectoryStatesDuration.AddRange(
+                    ExtendLaneHistoryToTime(
+                        currentTrajectory.LaneFrom,
+                        lastState,
+                        fromState.t));
+            }
 
             keepLaneTrajectory.LaneFrom = currentTrajectory.LaneFrom;
             keepLaneTrajectory.LaneTo = currentTrajectory.LaneFrom;
             foreach (var state in lastTrajectoryStatesDuration)
             {
-                keepLaneTrajectory.states.Add(state);
+                if (state.t < fromState.t)
+                {
+                    keepLaneTrajectory.states.Add(state);
+                }
             }
 
             var keepLane = BuildLaneFollowTrajectory(keepLaneTrajectory.LaneTo, fromState);
@@ -1141,7 +1162,7 @@ public class TrajectoryPredictor : MonoBehaviour
             {
                 keepLaneTrajectory.states.Add(state);
             }
-            keepLaneTrajectory.trajectoryStart = fromState.t;
+            keepLaneTrajectory.trajectoryStart = latestState.t;
             TransitionTrajectories.Add(keepLaneTrajectory); 
         }
 
@@ -2597,5 +2618,51 @@ public class TrajectoryPredictor : MonoBehaviour
         positionNoiseDirection = Random.insideUnitCircle.normalized;
         headingNoiseDirection = Random.value < 0.5f ? -1 : 1;
         speedNoiseDirection = Random.value < 0.5f ? -1 : 1;
+    }
+
+    private List<VehicleState> ExtendLaneHistoryToTime(
+    Transform lane,
+    VehicleState startState,
+    float targetTime)
+    {
+        List<VehicleState> result = new List<VehicleState>();
+
+        float dt = sampleRate;
+
+        Vector3 pos = startState.position;
+        float velocity = Mathf.Max(startState.velocity, vehicleController.GetSpeedLimitMin());
+        float accel = startState.acceleration;
+        float heading = startState.heading;
+        float t = startState.t;
+
+        while (t + dt < targetTime)
+        {
+            if (velocity + accel * dt < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else
+                velocity += accel * dt;
+
+            float targetX = lane.position.x;
+
+            pos.x = targetX;
+            pos.z += velocity * dt;
+
+            float dxdt = (targetX - pos.x) / dt;
+            float dzdt = Mathf.Max(velocity, 0.0001f);
+            heading = Mathf.Atan2(dxdt, dzdt);
+
+            t += dt;
+
+            result.Add(new VehicleState
+            {
+                t = t,
+                position = pos,
+                heading = heading,
+                velocity = velocity,
+                acceleration = accel
+            });
+        }
+
+        return result;
     }
 }
