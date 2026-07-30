@@ -69,7 +69,7 @@ private float targetCruiseOscillationMagnitude;
     private float previousTargetLongitudinalVelocity;
 
     [Header("Current Values")]
-    [SerializeField] private float heading;
+    [SerializeField] public float heading;
 
     [SerializeField] private float velocity;
     [SerializeField] private float acceleration;
@@ -113,7 +113,46 @@ private float targetCruiseOscillationMagnitude;
     private float laneChangeStartX;
     private float laneChangeTargetX;
 
+    private void OnEnable()
+    {
+        //select the closest centre line
+        if (centreLines == null || centreLines.Count == 0)
+        {
+            currentCentreLine = null;
+            return;
+        }
 
+        Transform closest = null;
+        float closestSqrDistance = float.MaxValue;
+
+        Vector3 position = transform.position;
+
+        foreach (Transform centreLine in centreLines)
+        {
+            if (centreLine == null)
+                continue;
+
+            float sqrDistance = (centreLine.position - position).sqrMagnitude;
+
+            if (sqrDistance < closestSqrDistance)
+            {
+                closestSqrDistance = sqrDistance;
+                closest = centreLine;
+            }
+        }
+
+        currentCentreLine = closest;
+    }
+    private void OnDisable()
+    {
+        longitudinalState = LongitudinalState.Cruise;
+        lateralState = LateralState.Cruise;
+        // Reset timer.
+        timeSpentCruising = 0f;
+        nextLaneChangeTime = Random.Range(
+            minCruiseTimeChangeLane,
+            maxCruiseTimeChangeLane);
+    }
     private void Start()
     {
         velocity = targetLongitudinalVelocity;
