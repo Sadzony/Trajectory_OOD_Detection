@@ -43,6 +43,8 @@ public class TrailOffBehaviour : MonoBehaviour
     {
         braking = false;
         vehicleController.heading = heading;
+        vehicleController.velocity = velocity;
+        vehicleController.acceleration = acceleration;
         acceleration = -1.0f;
         steeringAngle = 0;
     }
@@ -59,6 +61,10 @@ public class TrailOffBehaviour : MonoBehaviour
         UpdateBicycleModel(dt);
 
         CheckPassedTarget();
+
+        vehicleController.heading = heading;
+        vehicleController.velocity = velocity;
+        vehicleController.acceleration = acceleration;
     }
 
 

@@ -1172,6 +1172,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 173099315}
   m_CullTransparentMesh: 1
+--- !u!4 &180002126 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4220875403062960160, guid: a85ed6e0d9c54a947924a17a929bfa84, type: 3}
+  m_PrefabInstance: {fileID: 9189951290191460297}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &233606595
 GameObject:
   m_ObjectHideFlags: 0
@@ -2438,7 +2443,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 346306227}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1433074811}
+        m_TargetAssemblyTypeName: ButtonsController, Assembly-CSharp
+        m_MethodName: TriggerZigZagRoad
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &346306227
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5338,7 +5355,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 931425907}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1433074811}
+        m_TargetAssemblyTypeName: ButtonsController, Assembly-CSharp
+        m_MethodName: TriggerCutLane
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &931425907
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6125,7 +6154,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Intermittent OOD
+  m_text: Activate Intermittent OOD
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -7888,7 +7917,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1419561324}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1433074811}
+        m_TargetAssemblyTypeName: ButtonsController, Assembly-CSharp
+        m_MethodName: TriggerTrailOff
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1419561324
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8112,8 +8153,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ButtonsController
   car: {fileID: 1653004210}
+  traillOffBehaviour: {fileID: 1653004211}
+  zigZagLaneBehaviour: {fileID: 1653004215}
+  zigZagRoadBehaviour: {fileID: 1653004216}
   DefaultBehaviourButton: {fileID: 1218622474}
+  IntermittentOODButton: {fileID: 1781718267}
   BrakingButton: {fileID: 1481604813}
+  TrailOffButton: {fileID: 1419561323}
+  ZigZagLaneButton: {fileID: 1685771197}
+  ZigZagRoadButton: {fileID: 346306226}
+  CutButton: {fileID: 931425906}
+  LossOfControlButton: {fileID: 2144699407}
 --- !u!1 &1437589378
 GameObject:
   m_ObjectHideFlags: 0
@@ -8549,6 +8599,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TooltipTrigger
   tooltipMessage: Decelerates the vehicle to a stop, during lane change or lane follow.
+--- !u!4 &1525980090 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5176649405657296743, guid: a85ed6e0d9c54a947924a17a929bfa84, type: 3}
+  m_PrefabInstance: {fileID: 9189951290191460297}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1575210620 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
@@ -8951,8 +9006,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   vehicleLength: 4
-  minCruiseTimeChangeLane: 2.5
-  maxCruiseTimeChangeLane: 6
+  minCruiseTimeChangeLane: 3
+  maxCruiseTimeChangeLane: 4.5
   targetLongitudinalVelocity: 0
   manouvreDuration: 2.5
   laneAlignmentTolerance: 0.125
@@ -8961,6 +9016,9 @@ MonoBehaviour:
   - {fileID: 1908850707}
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
+  separationLines:
+  - {fileID: 1525980090}
+  - {fileID: 180002126}
   addMotionBias: 0
   motionBias: 1
   motionBiasMin: 0.85
@@ -8980,6 +9038,7 @@ MonoBehaviour:
   heading: 0
   velocity: 0
   acceleration: 0
+  laneSettleDuration: 1.25
   longitudinalState: 0
   lateralState: 0
 --- !u!114 &1653004211
@@ -9007,6 +9066,56 @@ MonoBehaviour:
   lateralVelocity: 0
   brakingAcceleration: -14
   stopThreshold: 0.05
+--- !u!114 &1653004215
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1575210620}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 478cafb10c92a6e4d827dd015da3b337, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  vehicleController: {fileID: 1653004210}
+  currentCentreLine: {fileID: 0}
+  centreLines:
+  - {fileID: 1908850707}
+  - {fileID: 9189951290191460299}
+  - {fileID: 9189951290191460298}
+  leftZigZagPoint: {x: 0, y: 0, z: 0}
+  rightZigZagPoint: {x: 0, y: 0, z: 0}
+  nextZigZagTarget: {x: 0, y: 0, z: 0}
+  velocity: 0
+  acceleration: 0
+  heading: 0
+  timeToZigZag: 2
+--- !u!114 &1653004216
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1575210620}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eac4662b99913c4ebe28f50658f6532, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  vehicleController: {fileID: 1653004210}
+  currentCentreLine: {fileID: 0}
+  centreLines:
+  - {fileID: 1908850707}
+  - {fileID: 9189951290191460299}
+  - {fileID: 9189951290191460298}
+  leftZigZagPoint: {x: 0, y: 0, z: 0}
+  rightZigZagPoint: {x: 0, y: 0, z: 0}
+  nextZigZagTarget: {x: 0, y: 0, z: 0}
+  velocity: 0
+  acceleration: 0
+  heading: 0
+  timeToZigZag: 5
 --- !u!1 &1653618892
 GameObject:
   m_ObjectHideFlags: 0
@@ -9248,7 +9357,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1685771198}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1433074811}
+        m_TargetAssemblyTypeName: ButtonsController, Assembly-CSharp
+        m_MethodName: TriggerZigZagLane
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1685771198
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12242,6 +12363,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1653004211}
+    - targetCorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1653004215}
+    - targetCorrespondingSourceObject: {fileID: 31849085474275920, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1653004216}
   m_SourcePrefab: {fileID: 100100000, guid: 6f910e3ea336ccc4b97e862c8056d7b1, type: 3}
 --- !u!1001 &5163527306798713594
 PrefabInstance:

@@ -25,9 +25,11 @@ public class LaneDefinedMovementQuintic : MonoBehaviour
 
     [Header("Lateral")]
     [SerializeField] private float manouvreDuration = 2.5f;
+    [SerializeField] float laneSettleDuration;
     [SerializeField] private float laneAlignmentTolerance = 0.05f;
     [SerializeField] public Transform currentCentreLine;
     [SerializeField] public List<Transform> centreLines;
+    [SerializeField] public List<Transform> separationLines;
 
     [Header("Lane Changing Noise")]
     [SerializeField] public bool addMotionBias = false;
@@ -71,8 +73,11 @@ private float targetCruiseOscillationMagnitude;
     [Header("Current Values")]
     [SerializeField] public float heading;
 
-    [SerializeField] private float velocity;
-    [SerializeField] private float acceleration;
+    [SerializeField] public float velocity;
+    [SerializeField] public float acceleration;
+
+    bool cuttingLanes = false;
+    Transform preCuttingLane;
 
     //accessor functions
     public float GetManouvreDuration() => manouvreDuration;
@@ -87,6 +92,12 @@ private float targetCruiseOscillationMagnitude;
 
     public float GetSpeedLimitMin() => speedLimitMinimum;
     public float GetSpeedLimitMax() => speedLimitMaximum;
+
+    public float GetBrakingDeceleration() => brakingDeceleration;
+
+    public float GetLaneSettleDuration() => laneSettleDuration;
+
+    
 
     public void SetTargetVelocity(float velocityMs)
     {
@@ -123,7 +134,7 @@ private float targetCruiseOscillationMagnitude;
         }
 
         Transform closest = null;
-        float closestSqrDistance = float.MaxValue;
+        float closestDist = float.MaxValue;
 
         Vector3 position = transform.position;
 
@@ -132,16 +143,34 @@ private float targetCruiseOscillationMagnitude;
             if (centreLine == null)
                 continue;
 
-            float sqrDistance = (centreLine.position - position).sqrMagnitude;
-
-            if (sqrDistance < closestSqrDistance)
+            float dist = (new Vector3(centreLine.position.x, position.y, position.z) - position).magnitude;
+            // If this line is almost the same distance as the current closest,
+            // randomly decide whether to keep the existing one or use this one.
+            if (dist < closestDist - 0.1f)
             {
-                closestSqrDistance = sqrDistance;
+                // Definitely closer.
+                closestDist = dist;
                 closest = centreLine;
+            }
+
+            else if (Mathf.Abs(dist - closestDist) < 0.1f)
+            {
+                if (Random.value < 0.5f)
+                {
+                    closestDist = dist;
+                    closest = centreLine;
+                }
             }
         }
 
+        // Reset timer.
+        timeSpentCruising = 0f;
+        nextLaneChangeTime = Random.Range(
+            minCruiseTimeChangeLane,
+            maxCruiseTimeChangeLane);
+
         currentCentreLine = closest;
+
     }
     private void OnDisable()
     {
@@ -259,7 +288,7 @@ private float targetCruiseOscillationMagnitude;
                         //{
                             acceleration = Mathf.Clamp(
                                 float.IsNaN(error / dt) ? 0f : error / dt,
-                                -maxLongitudinalAcceleration,
+                                -brakingDeceleration,
                                 maxLongitudinalAcceleration);
                         //}
                     }
@@ -470,6 +499,12 @@ private float targetCruiseOscillationMagnitude;
 
         int chosenIndex = possibleIndices[Random.Range(0, possibleIndices.Count)];
 
+        if (cuttingLanes)
+        {
+            chosenIndex = centreLines.IndexOf(preCuttingLane);
+            cuttingLanes = false;
+        }
+
         currentCentreLine = centreLines[chosenIndex];
 
         // Randomise lane-change profile.
@@ -514,5 +549,56 @@ private float targetCruiseOscillationMagnitude;
     {
         return kilometresPerHour / 3.6f;
     }
+    public void TriggerCutThroughTraffic()
+    {
+        //select closest separation line
+        //select the closest centre line
+        if (separationLines == null || separationLines.Count == 0)
+        {
+            currentCentreLine = null;
+            return;
+        }
 
+        Transform closest = null;
+        float closestDist = float.MaxValue;
+
+        Vector3 position = transform.position;
+
+        foreach (Transform line in separationLines)
+        {
+            if (line == null)
+                continue;
+
+            float dist = (new Vector3(line.position.x, position.y, position.z) - position).magnitude;
+
+            // If this line is almost the same distance as the current closest,
+            // randomly decide whether to keep the existing one or use this one.
+            if (dist < closestDist - 0.1f)
+            {
+                // Definitely closer.
+                closestDist = dist;
+                closest = line;
+            }
+
+            else if (Mathf.Abs(dist - closestDist) < 0.1f)
+            {
+                if (Random.value < 0.5f)
+                {
+                    closestDist = dist;
+                    closest = line;
+                }
+            }
+            
+        }
+        cuttingLanes = true;
+        preCuttingLane = currentCentreLine;
+
+        // Reset timer.
+        timeSpentCruising = 0.0f;
+        nextLaneChangeTime = Random.Range(
+            minCruiseTimeChangeLane,
+            maxCruiseTimeChangeLane);
+
+        currentCentreLine = closest;
+    }
 }

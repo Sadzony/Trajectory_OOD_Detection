@@ -25,7 +25,7 @@ public enum PredictionMode
 public class Trajectory
 {
     public Trajectory() { }
-    public Trajectory(Trajectory copy) { trajectoryStart = copy.trajectoryStart; LaneFrom = copy.LaneFrom; LaneTo = copy.LaneTo; states = new List<VehicleState>(copy.states); followingTrajectory = copy.followingTrajectory; }
+    public Trajectory(Trajectory copy) { trajectoryStart = copy.trajectoryStart; LaneFrom = copy.LaneFrom; LaneTo = copy.LaneTo; states = new List<VehicleState>(copy.states); followingTrajectory = copy.followingTrajectory; isLaneSettle = copy.isLaneSettle; }
     public float trajectoryStart = 0.0f;
     public Transform LaneFrom;
     public Transform LaneTo;
@@ -148,7 +148,7 @@ public class TrajectoryPredictor : MonoBehaviour
             currentTrajectory = UpdateTrajectory(currentTrajectory, latestObservation);
 
             //1. Update the set of transition Trajectories based on observed state
-            if (transitions && !currentTrajectory.isLaneSettle)
+            if (transitions)
                 TransitionTrajectories = FindTransitionTrajectories(latestObservation);
 
             int currentTrajectoryAnchorIndex = FindClosestIndex(currentTrajectory.states, Observations[^1].t);
@@ -181,7 +181,7 @@ public class TrajectoryPredictor : MonoBehaviour
             if (((predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE) && cumulativeErrorSum > OODThresholdEuclidean) ||
                 ((predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal) && cumulativeErrorSum > OODThresholdLCSS))
             {
-
+                Debug.Log("OOD Engaged");
                 //generate first ctra traj
                 currentTrajectory = GenerateCTRATrajectory();
                 //clear transition trajectories
@@ -1023,87 +1023,14 @@ public class TrajectoryPredictor : MonoBehaviour
 
 
         List<VehicleState> lastTrajectoryStates;
-        if (currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
-        {
-            lastTrajectoryStates = currentTrajectory.states.Where(s =>
-                                                                s.t >= currentTrajectory.trajectoryStart - vehicleController.GetManouvreDuration() && 
-                                                                s.position.z < fromState.position.z && s.t < fromState.t)
-                                                                .ToList();
-        }
-        else
+        if (currentTrajectory.isLaneSettle)
         {
             lastTrajectoryStates = currentTrajectory.states.Where(s => s.t < currentTrajectory.trajectoryStart).ToList();
-        }
+            var latestState = lastTrajectoryStates[^1];
 
-        if (lastTrajectoryStates.Count == 0 || fromState.velocity < vehicleController.GetSpeedLimitMin())
-            return TransitionTrajectories;
-        var latestState = lastTrajectoryStates[^1];
-        
-        if(currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
-        {
-            
-            Transform currentLane = currentTrajectory.LaneTo;
-            //create a lane change trajectory, for every neighbouring lane
-            int currentLaneIndex = centreLanes.IndexOf(currentLane);
-
-            //create an updated trajectory for the same lane
-            var observationUpdateTrajectory = new Trajectory();
-
-            observationUpdateTrajectory.LaneFrom = currentTrajectory.LaneFrom;
-            observationUpdateTrajectory.LaneTo = currentTrajectory.LaneTo;
-            foreach (var state in lastTrajectoryStates)
-            {
-                observationUpdateTrajectory.states.Add(state);
-            }
-
-            var updatedTraj = BuildLaneFollowTrajectory(observationUpdateTrajectory.LaneTo, fromState);
-            foreach (var state in updatedTraj.states)
-            {
-                observationUpdateTrajectory.states.Add(state);
-            }
-            observationUpdateTrajectory.trajectoryStart = latestState.t;
-            TransitionTrajectories.Add(observationUpdateTrajectory); 
-
-
-            for (int i = 0; i < centreLanes.Count; i++)
-            {
-                //act only on lanes which are 1 index away from this lane
-                if (Mathf.Abs(i - currentLaneIndex) == 1)
-                {
-                    var laneCentre = centreLanes[i];
-
-                    var laneChangeTrajectory = new Trajectory();
-                    laneChangeTrajectory.LaneFrom = currentTrajectory.LaneTo;
-                    laneChangeTrajectory.LaneTo = laneCentre;
-
-
-                    foreach (var state in lastTrajectoryStates)
-                    {
-                        laneChangeTrajectory.states.Add(state);
-                    }
-
-                    laneChangeTrajectory.trajectoryStart = latestState.t;
-
-                    var changingLaneTrajectory =
-                        BuildLaneChangeTrajectory(laneChangeTrajectory.LaneFrom,
-                            laneChangeTrajectory.LaneTo,
-                            fromState);
-                    foreach (var state in changingLaneTrajectory.states)
-                    {
-                        laneChangeTrajectory.states.Add(state);
-                    }
-
-                    TransitionTrajectories.Add(laneChangeTrajectory);
-                }
-            }
-        }
-        
-        else
-        {
             //create an updated LaneChange trajectory
-            Trajectory? updatedTrajResult = UpdateLaneChangeTrajectory(
+            Trajectory? updatedTrajResult = UpdateLaneSettleTrajectory(
                     currentTrajectory,
-                    currentTrajectory.LaneFrom,
                     currentTrajectory.LaneTo,
                     fromState);
             if (updatedTrajResult != null)
@@ -1111,6 +1038,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 var updatedTraj = new Trajectory();
                 updatedTraj.LaneFrom = updatedTrajResult.LaneFrom;
                 updatedTraj.LaneTo = updatedTrajResult.LaneTo;
+                updatedTraj.isLaneSettle = updatedTrajResult.isLaneSettle;
                 foreach (var state in lastTrajectoryStates)
                 {
                     updatedTraj.states.Add(state);
@@ -1124,63 +1052,167 @@ public class TrajectoryPredictor : MonoBehaviour
                 updatedTraj.trajectoryStart = latestState.t;
                 TransitionTrajectories.Add(updatedTraj);
             }
-
-            //Continue Generating the keep lane trajectories for the original lane
-           
-            var keepLaneTrajectory = new Trajectory();
-
-            var lastTrajectoryStatesDuration = currentTrajectory.states
-                .Where(s =>
-                    s.t >= fromState.t - vehicleController.GetManouvreDuration() &&
-                    s.position.z < fromState.position.z &&
-                    s.t < currentTrajectory.trajectoryStart)
-                .ToList();
-
-            if (lastTrajectoryStatesDuration.Count > 0)
+        }
+        else
+        {
+            if (currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
             {
-                VehicleState lastState = lastTrajectoryStatesDuration[^1];
-
-                lastTrajectoryStatesDuration.AddRange(
-                    ExtendLaneHistoryToTime(
-                        currentTrajectory.LaneFrom,
-                        lastState,
-                        fromState.t));
+                lastTrajectoryStates = currentTrajectory.states.Where(s =>
+                                                                    s.t >= currentTrajectory.trajectoryStart - vehicleController.GetManouvreDuration() &&
+                                                                    s.position.z < fromState.position.z && s.t < fromState.t)
+                                                                    .ToList();
+            }
+            else
+            {
+                lastTrajectoryStates = currentTrajectory.states.Where(s => s.t < currentTrajectory.trajectoryStart).ToList();
             }
 
-            keepLaneTrajectory.LaneFrom = currentTrajectory.LaneFrom;
-            keepLaneTrajectory.LaneTo = currentTrajectory.LaneFrom;
-            foreach (var state in lastTrajectoryStatesDuration)
+            if (lastTrajectoryStates.Count == 0 || fromState.velocity < vehicleController.GetSpeedLimitMin())
+                return TransitionTrajectories;
+            var latestState = lastTrajectoryStates[^1];
+
+            if (currentTrajectory.LaneFrom == currentTrajectory.LaneTo)
             {
-                if (state.t < fromState.t)
+
+                Transform currentLane = currentTrajectory.LaneTo;
+                //create a lane change trajectory, for every neighbouring lane
+                int currentLaneIndex = centreLanes.IndexOf(currentLane);
+
+                //create an updated trajectory for the same lane
+                var observationUpdateTrajectory = new Trajectory();
+
+                observationUpdateTrajectory.LaneFrom = currentTrajectory.LaneFrom;
+                observationUpdateTrajectory.LaneTo = currentTrajectory.LaneTo;
+                foreach (var state in lastTrajectoryStates)
                 {
-                    keepLaneTrajectory.states.Add(state);
+                    observationUpdateTrajectory.states.Add(state);
+                }
+
+                var updatedTraj = BuildLaneFollowTrajectory(observationUpdateTrajectory.LaneTo, fromState);
+                foreach (var state in updatedTraj.states)
+                {
+                    observationUpdateTrajectory.states.Add(state);
+                }
+                observationUpdateTrajectory.trajectoryStart = latestState.t;
+                TransitionTrajectories.Add(observationUpdateTrajectory);
+
+
+                for (int i = 0; i < centreLanes.Count; i++)
+                {
+                    //act only on lanes which are 1 index away from this lane
+                    if (Mathf.Abs(i - currentLaneIndex) == 1)
+                    {
+                        var laneCentre = centreLanes[i];
+
+                        var laneChangeTrajectory = new Trajectory();
+                        laneChangeTrajectory.LaneFrom = currentTrajectory.LaneTo;
+                        laneChangeTrajectory.LaneTo = laneCentre;
+
+
+                        foreach (var state in lastTrajectoryStates)
+                        {
+                            laneChangeTrajectory.states.Add(state);
+                        }
+
+                        laneChangeTrajectory.trajectoryStart = latestState.t;
+
+                        var changingLaneTrajectory =
+                            BuildLaneChangeTrajectory(laneChangeTrajectory.LaneFrom,
+                                laneChangeTrajectory.LaneTo,
+                                fromState);
+                        foreach (var state in changingLaneTrajectory.states)
+                        {
+                            laneChangeTrajectory.states.Add(state);
+                        }
+
+                        TransitionTrajectories.Add(laneChangeTrajectory);
+                    }
                 }
             }
 
-            var keepLane = BuildLaneFollowTrajectory(keepLaneTrajectory.LaneTo, fromState);
-            foreach (var state in keepLane.states)
+            else
             {
-                keepLaneTrajectory.states.Add(state);
-            }
-            keepLaneTrajectory.trajectoryStart = latestState.t;
-            TransitionTrajectories.Add(keepLaneTrajectory); 
-        }
-
-        //append updated LaneFollow trajectories for every other lane, without history
-        /*
-        for (int i = 0; i < centreLanes.Count; i++)
-        {
-            if (currentLaneIndex != i)
-            {
-                var laneCentre = centreLanes[i];
-
-                var followLaneTrajectory =
-                    BuildLaneFollowTrajectory(laneCentre,
+                //create an updated LaneChange trajectory
+                Trajectory? updatedTrajResult = UpdateLaneChangeTrajectory(
+                        currentTrajectory,
+                        currentTrajectory.LaneFrom,
+                        currentTrajectory.LaneTo,
                         fromState);
-                TransitionTrajectories.Add(followLaneTrajectory);
-            }
-        }*/
+                if (updatedTrajResult != null)
+                {
+                    var updatedTraj = new Trajectory();
+                    updatedTraj.LaneFrom = updatedTrajResult.LaneFrom;
+                    updatedTraj.LaneTo = updatedTrajResult.LaneTo;
+                    foreach (var state in lastTrajectoryStates)
+                    {
+                        updatedTraj.states.Add(state);
+                    }
+                    foreach (var state in updatedTrajResult.states)
+                    {
+                        updatedTraj.states.Add(state);
+                    }
 
+                    updatedTraj.followingTrajectory = null;
+                    updatedTraj.trajectoryStart = latestState.t;
+                    TransitionTrajectories.Add(updatedTraj);
+                }
+
+                //Continue Generating the keep lane trajectories for the original lane
+
+                var keepLaneTrajectory = new Trajectory();
+
+                var lastTrajectoryStatesDuration = currentTrajectory.states
+                    .Where(s =>
+                        s.t >= fromState.t - vehicleController.GetManouvreDuration() &&
+                        s.position.z < fromState.position.z &&
+                        s.t < currentTrajectory.trajectoryStart)
+                    .ToList();
+
+                if (lastTrajectoryStatesDuration.Count > 0)
+                {
+                    VehicleState lastState = lastTrajectoryStatesDuration[^1];
+
+                    lastTrajectoryStatesDuration.AddRange(
+                        ExtendLaneHistoryToTime(
+                            currentTrajectory.LaneFrom,
+                            lastState,
+                            fromState.t));
+                }
+
+                keepLaneTrajectory.LaneFrom = currentTrajectory.LaneFrom;
+                keepLaneTrajectory.LaneTo = currentTrajectory.LaneFrom;
+                foreach (var state in lastTrajectoryStatesDuration)
+                {
+                    if (state.t < fromState.t)
+                    {
+                        keepLaneTrajectory.states.Add(state);
+                    }
+                }
+
+                var keepLane = BuildLaneFollowTrajectory(keepLaneTrajectory.LaneTo, fromState);
+                foreach (var state in keepLane.states)
+                {
+                    keepLaneTrajectory.states.Add(state);
+                }
+                keepLaneTrajectory.trajectoryStart = latestState.t;
+                TransitionTrajectories.Add(keepLaneTrajectory);
+            }
+
+            //append updated LaneFollow trajectories for every other lane, without history
+            /*
+            for (int i = 0; i < centreLanes.Count; i++)
+            {
+                if (currentLaneIndex != i)
+                {
+                    var laneCentre = centreLanes[i];
+
+                    var followLaneTrajectory =
+                        BuildLaneFollowTrajectory(laneCentre,
+                            fromState);
+                    TransitionTrajectories.Add(followLaneTrajectory);
+                }
+            }*/
+        }
         return TransitionTrajectories;
     }
 
@@ -1644,6 +1676,134 @@ public class TrajectoryPredictor : MonoBehaviour
         return resultTrajectory;
     }
 
+    public Trajectory? UpdateLaneSettleTrajectory(Trajectory updateTrajectory, Transform Lane, VehicleState Observation)
+    {
+        Trajectory resultTrajectory = new Trajectory();
+
+        resultTrajectory.LaneFrom = Lane;
+        resultTrajectory.LaneTo = Lane;
+        resultTrajectory.isLaneSettle = true;
+
+        var updateTrajectoryStates = updateTrajectory.states.Where(s => s.t < Observation.t && s.t >= updateTrajectory.trajectoryStart).ToList();
+
+        foreach (var state in updateTrajectoryStates)
+        {
+            resultTrajectory.states.Add(state);
+        }
+
+        var tolerance = sampleRate * 0.5f;
+        var updateStartStateResult = updateTrajectory.states.Find(s => Mathf.Abs(s.t - Observation.t) < tolerance);
+        VehicleState updateStartState;
+        if (updateStartStateResult == null)
+            return null;
+        else updateStartState = updateStartStateResult;
+
+        var timeWithinCurrent = updateStartState.t - updateTrajectory.trajectoryStart;
+        var differenceToManouvreDuration = vehicleController.GetLaneSettleDuration() - timeWithinCurrent;
+
+        float dt = sampleRate;
+
+        Vector3 pos = updateStartState.position;
+
+        float velocity;
+        velocity = Mathf.Max(Observation.velocity, vehicleController.GetSpeedLimitMin());
+        //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+
+
+        float accel = Observation.acceleration;
+
+        float heading = Observation.heading;
+
+        float t = updateStartState.t;
+        resultTrajectory.trajectoryStart = updateTrajectory.trajectoryStart;
+
+        float trajectoryTime = timeWithinCurrent;
+
+        float startX = Observation.position.x;
+        float targetX = Lane.position.x;
+        float deltaX = targetX - startX;
+
+        var duration = vehicleController.GetLaneSettleDuration(); ;
+
+        // First point (matches current observation)
+        float u = timeWithinCurrent / duration;
+
+        float ds =
+            30f * u * u
+            - 60f * u * u * u
+            + 30f * u * u * u * u;
+
+        float dxdt = (deltaX * ds) / duration;
+        float dzdt = Mathf.Max(velocity, 0.0001f);
+
+        heading = Mathf.Atan2(dxdt, dzdt);
+
+        resultTrajectory.states.Add(new VehicleState
+        {
+            t = t,
+            position = pos,
+            heading = heading,
+            velocity = velocity,
+            acceleration = accel
+        });
+
+        t += dt;
+        trajectoryTime += dt;
+
+        while (trajectoryTime < duration)
+        {
+            // longitudinal motion
+            if (velocity + (accel * dt) < vehicleController.GetSpeedLimitMin())
+                velocity = vehicleController.GetSpeedLimitMin();
+            else velocity = velocity + (accel * dt);
+            //velocity = Mathf.Min(velocity, vehicleController.GetSpeedLimitMax());
+
+            float dz = velocity * dt;
+            pos.z += dz;
+
+            // lane-change progress
+            u = Mathf.Clamp01(
+                trajectoryTime / duration
+            );
+
+            // Quintic smoothstep
+            float s =
+                10f * u * u * u
+                - 15f * u * u * u * u
+                + 6f * u * u * u * u * u;
+
+            pos.x = startX + deltaX * s;
+
+            // heading from quintic derivative
+            ds =
+                30f * u * u
+                - 60f * u * u * u
+                + 30f * u * u * u * u;
+
+            dxdt =
+                (deltaX * ds)
+                / duration;
+
+            dzdt = Mathf.Max(velocity, 0.0001f);
+
+            heading = Mathf.Atan2(dxdt, dzdt);
+
+            resultTrajectory.states.Add(new VehicleState
+            {
+                t = t,
+                position = pos,
+                heading = heading,
+                velocity = velocity,
+                acceleration = accel
+            });
+
+            t += dt;
+            trajectoryTime += dt;
+        }
+
+        return resultTrajectory;
+    }
+
     public Trajectory BuildLaneSettleTrajectory(Trajectory leadingTrajectory, Transform Lane, VehicleState Observation)
     {
         Trajectory resultTrajectory = new Trajectory();
@@ -1678,7 +1838,7 @@ public class TrajectoryPredictor : MonoBehaviour
         resultTrajectory.trajectoryStart = t;
 
         float trajectoryTime = 0f;
-        float duration = 0.5f;
+        float duration = vehicleController.GetLaneSettleDuration();
 
         float startX = Observation.position.x;
         float targetX = Lane.position.x;
