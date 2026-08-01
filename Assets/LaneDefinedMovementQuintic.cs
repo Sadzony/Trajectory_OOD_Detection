@@ -76,7 +76,7 @@ private float targetCruiseOscillationMagnitude;
     [SerializeField] public float velocity;
     [SerializeField] public float acceleration;
 
-    bool cuttingLanes = false;
+    public bool cuttingLanes = false;
     Transform preCuttingLane;
 
     //accessor functions
@@ -97,7 +97,7 @@ private float targetCruiseOscillationMagnitude;
 
     public float GetLaneSettleDuration() => laneSettleDuration;
 
-    
+    public float GetTimeSpentCruising() => timeSpentCruising;
 
     public void SetTargetVelocity(float velocityMs)
     {
@@ -123,6 +123,9 @@ private float targetCruiseOscillationMagnitude;
     private float laneChangeTime;
     private float laneChangeStartX;
     private float laneChangeTargetX;
+
+    private bool laneToCutNeedsFinding = false;
+    private bool cutLaneEntered = true;
 
     private void OnEnable()
     {
@@ -399,6 +402,10 @@ private float targetCruiseOscillationMagnitude;
 
             if (u >= 1f)
             {
+                if (!cutLaneEntered)
+                    cutLaneEntered = true;
+                else if (cuttingLanes)
+                    cuttingLanes = false;
                 u = 1f;
                 cruiseStartTime = Time.time;
                 lateralState = LateralState.Cruise;
@@ -465,6 +472,10 @@ private float targetCruiseOscillationMagnitude;
 
     public void ResumeDriving()
     {
+        timeSpentCruising = 0.0f;
+        nextLaneChangeTime = Random.Range(
+            minCruiseTimeChangeLane,
+            maxCruiseTimeChangeLane);
         targetCruiseOscillationMagnitude = cruiseOscillationMagnitude;
         longitudinalState = LongitudinalState.Cruise;
     }
@@ -480,7 +491,7 @@ private float targetCruiseOscillationMagnitude;
 
         timeSpentCruising += dt;
 
-        if (timeSpentCruising < nextLaneChangeTime)
+        if (timeSpentCruising < nextLaneChangeTime || timeSpentCruising < laneSettleDuration)
             return;
 
         // Choose a neighbouring lane.
@@ -499,10 +510,10 @@ private float targetCruiseOscillationMagnitude;
 
         int chosenIndex = possibleIndices[Random.Range(0, possibleIndices.Count)];
 
-        if (cuttingLanes)
+        if (laneToCutNeedsFinding)
         {
             chosenIndex = centreLines.IndexOf(preCuttingLane);
-            cuttingLanes = false;
+            laneToCutNeedsFinding = false;
         }
 
         currentCentreLine = centreLines[chosenIndex];
@@ -591,6 +602,8 @@ private float targetCruiseOscillationMagnitude;
             
         }
         cuttingLanes = true;
+        cutLaneEntered = false;
+        laneToCutNeedsFinding = true;
         preCuttingLane = currentCentreLine;
 
         // Reset timer.

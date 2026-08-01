@@ -13,7 +13,6 @@ public class TrailOffBehaviour : MonoBehaviour
     [SerializeField] private float wheelBase = 2.7f;
     [SerializeField] public float maxWheelRotation = 30f;
     [SerializeField] private float steeringResponse = 3f;
-    [SerializeField] private float lateralVelocity;   // sideways (x)
 
     [SerializeField] private float brakingAcceleration = -10f;
     [SerializeField] private float stopThreshold = 0.05f;
@@ -35,7 +34,6 @@ public class TrailOffBehaviour : MonoBehaviour
         currentTarget = targets[Random.Range(0, targets.Count)];
         velocity = vehicleController.GetCurrentVelocity();
         acceleration = -1.0f;
-        lateralVelocity = 0;
         heading = transform.eulerAngles.y * Mathf.Deg2Rad;
         braking = false;
     }
@@ -77,7 +75,12 @@ public class TrailOffBehaviour : MonoBehaviour
         }
         else
         {
-            acceleration = 0f;
+            acceleration = -1.0f;
+            float minAcceleration = -velocity / dt;
+
+            if (acceleration < minAcceleration)
+                acceleration = minAcceleration;
+
         }
 
 

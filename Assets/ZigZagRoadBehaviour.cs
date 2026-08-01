@@ -11,9 +11,9 @@ public class ZigZagRoadBehaviour : MonoBehaviour
     public Vector3 rightZigZagPoint;
     public Vector3 nextZigZagTarget;
 
-    [SerializeField] public float velocity;
-    [SerializeField] public float acceleration;
-    [SerializeField] public float heading;
+    public float velocity;
+    public float acceleration;
+    public float heading;
     [SerializeField] public float timeToZigZag;
     private float currentTimeToZigZag;
     private float zigZagTime = 0.0f;

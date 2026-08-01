@@ -33,25 +33,28 @@ public class SpeedInputController : MonoBehaviour
 
     public void OnSpeedChanged(string value)
     {
-        if (updatingField)
-            return;
-
-        if (int.TryParse(value, out int speedKmh))
+        if (inputField.interactable)
         {
-            if (speedKmh < 10)
+            if (updatingField)
+                return;
+
+            if (int.TryParse(value, out int speedKmh))
             {
-                speedKmh *= 10;
-                value = speedKmh.ToString();
+                if (speedKmh < 10)
+                {
+                    speedKmh *= 10;
+                    value = speedKmh.ToString();
+                }
+                speedKmh = Mathf.Max(speedKmh, 10);
+
+                updatingField = true;
+                inputField.text = speedKmh.ToString();
+                updatingField = false;
+
+                float speedMs = speedKmh / 3.6f;
+
+                carBehaviour.SetTargetVelocity(speedMs);
             }
-            speedKmh = Mathf.Max(speedKmh, 10);
-
-            updatingField = true;
-            inputField.text = speedKmh.ToString();
-            updatingField = false;
-
-            float speedMs = speedKmh / 3.6f;
-
-            carBehaviour.SetTargetVelocity(speedMs);
         }
     }
 }
