@@ -3686,6 +3686,7 @@ GameObject:
   m_Component:
   - component: {fileID: 566799449}
   - component: {fileID: 566799450}
+  - component: {fileID: 566799451}
   m_Layer: 5
   m_Name: Toggle
   m_TagString: Untagged
@@ -3761,6 +3762,20 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 0
+--- !u!114 &566799451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 566799448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ad1672f95621004d8dadba66174e733, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  toggle: {fileID: 0}
+  FARrecorder: {fileID: 1329216788}
 --- !u!1 &568083659
 GameObject:
   m_ObjectHideFlags: 0
@@ -7406,6 +7421,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ce8ef7c6f4c687499129733ac6189f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  FARrecorder: {fileID: 1329216788}
   cusumValueField: {fileID: 928126821}
   errorValueField: {fileID: 1270758716}
   vehicleController: {fileID: 1653004210}
@@ -7415,9 +7431,7 @@ MonoBehaviour:
   - {fileID: 9189951290191460298}
   predictionMode: 0
   cusumNoiseAlignmentEuclidean: 0.15
-  cusumNoiseAlignmentEuclideanWhenNoisy: 0.05
   cusumNoiseAlignmentLCSS: 0.015
-  cusumNoiseAlignmentLCSSWhenNoisy: 0.005
   cumulativeErrorSum: 0
   OODThresholdEuclidean: 2
   OODThresholdLCSS: 0.2
@@ -9426,6 +9440,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8243de93ff9327b498da0151d174c02d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  FARrecorder: {fileID: 1329216788}
   vehicleLength: 4
   minCruiseTimeChangeLane: 3
   maxCruiseTimeChangeLane: 4.5

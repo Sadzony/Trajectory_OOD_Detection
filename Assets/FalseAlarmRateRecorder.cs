@@ -4,7 +4,7 @@ using System.IO;
 
 public class FalseAlarmRateRecorder : MonoBehaviour
 {
-    private bool recordAlarms = true;
+    private bool recordAlarms = false;
 
     public bool RecordAlarms
     {
@@ -23,6 +23,7 @@ public class FalseAlarmRateRecorder : MonoBehaviour
     {
         // Clear old session data
         allTrajectoryRecords.Clear();
+        FalseAlarms.Clear();
 
         if (recordAlarms)
         {
@@ -36,40 +37,100 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
     private void StartNewCsvSession()
     {
-        currentCsvPath = Path.Combine(
-            Application.persistentDataPath,
-            $"AlarmSession_{System.DateTime.Now:yyyyMMdd_HHmmss}.csv");
+        currentSessionFolder = Path.Combine(
+            GetSessionFolder(),
+            $"Session_{System.DateTime.Now:ddMMyy_HHmmss}");
 
-        currentCsvFile = new StreamWriter(currentCsvPath, false);
+        Directory.CreateDirectory(currentSessionFolder);
 
-        // Header row
-        currentCsvFile.WriteLine(
-            "SimulationTime,TrajectoryStartTime,TrajectoryType,Alarm");
 
-        currentCsvFile.Flush();
+        // Summary file
+        string summaryPath = Path.Combine(
+            currentSessionFolder,
+            "Summary.csv");
 
-        Debug.Log($"Started alarm recording: {currentCsvPath}");
+        summaryCsvFile = new StreamWriter(summaryPath, false);
+
+        summaryCsvFile.WriteLine(
+            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Trajectories,Total Alarms,False Alarm Rate,Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
+
+        summaryCsvFile.Flush();
+
+
+
+        // Trajectories file
+        string trajectoriesPath = Path.Combine(
+            currentSessionFolder,
+            "Trajectories.csv");
+
+        trajectoriesCsvFile = new StreamWriter(trajectoriesPath, false);
+
+        trajectoriesCsvFile.WriteLine(
+            "Trajectory Type,Trajectory Start Time");
+
+        trajectoriesCsvFile.Flush();
+
+
+
+        // Alarms file
+        string alarmsPath = Path.Combine(
+            currentSessionFolder,
+            "Alarms.csv");
+
+        alarmsCsvFile = new StreamWriter(alarmsPath, false);
+
+        alarmsCsvFile.WriteLine(
+            "Trajectory Type,Predicted TrajectoryType,Trajectory Start Time,Alarm Time,Time Within Trajectory");
+
+        alarmsCsvFile.Flush();
+
+
+        Debug.Log($"Started alarm recording session: {currentSessionFolder}");
     }
 
 
     private void EndCsvSession()
     {
-        if (currentCsvFile != null)
-        {
-            currentCsvFile.Flush();
-            currentCsvFile.Close();
-            currentCsvFile.Dispose();
+        summaryCsvFile?.Dispose();
+        trajectoriesCsvFile?.Dispose();
+        alarmsCsvFile?.Dispose();
 
-            currentCsvFile = null;
-        }
+        summaryCsvFile = null;
+        trajectoriesCsvFile = null;
+        alarmsCsvFile = null;
 
-        currentCsvPath = null;
+        currentSessionFolder = null;
 
         Debug.Log("Alarm recording stopped.");
     }
 
-    private StreamWriter currentCsvFile;
-    private string currentCsvPath;
+    private string GetSessionFolder()
+    {
+        string folder;
+
+        if (Application.isEditor)
+        {
+            folder = Path.Combine(
+                Directory.GetParent(Application.dataPath).FullName,
+                "FalseAlarmRateSessions");
+        }
+        else
+        {
+            folder = Path.Combine(
+                Directory.GetParent(Application.dataPath).FullName,
+                "FalseAlarmRateSessions");
+        }
+
+        Directory.CreateDirectory(folder);
+
+        return folder;
+    }
+
+    private string currentSessionFolder;
+
+    private StreamWriter summaryCsvFile;
+    private StreamWriter trajectoriesCsvFile;
+    private StreamWriter alarmsCsvFile;
 
     public bool observationNoisePresent;
     public bool observationAnomaliesPresent;
@@ -189,9 +250,11 @@ public class FalseAlarmRateRecorder : MonoBehaviour
         public bool laneOscillationPresent;
     }
 
+    private List<FalseAlarmRecord> FalseAlarms = new List<FalseAlarmRecord>();
     public void RecordAlarmTrigger()
     {
-        if (currentBehaviour == CarBehaviours.Standard && recordAlarms)
+        if (currentBehaviour == CarBehaviours.Standard && recordAlarms && alarmsCsvFile != null && summaryCsvFile != null &&
+        currentSessionFolder != null && trajectoriesCsvFile != null)
         {
             var newFARrecord = new FalseAlarmRecord();
             newFARrecord.durationInManouvre = simulationTime - currentTrajectory.trajectoryStartTime;
@@ -216,24 +279,90 @@ public class FalseAlarmRateRecorder : MonoBehaviour
             newFARrecord.throttleNoisePresent = throttleNoisePresent;
             newFARrecord.laneOscillationPresent = laneOscillationPresent;
 
-            //save the False alarm
+            FalseAlarms.Add(newFARrecord);
 
+            //save the False alarm
+            alarmsCsvFile.WriteLine(
+            $"{currentTrajectory.type.ToString()}," +
+            $"{newFARrecord.predictedTrajectoryType}," +
+            $"{currentTrajectory.trajectoryStartTime:F5}," +
+            $"{newFARrecord.timeOfAlarm:F5}," +
+            $"{newFARrecord.durationInManouvre:F5}");
 
 
             //check if the current record actually exists (the only case this happens is when we just exited OOD and triggered it again before the manouvre finished)
             if (!allTrajectoryRecords.Contains(currentTrajectory))
             {
                 allTrajectoryRecords.Add(currentTrajectory);
+                                trajectoriesCsvFile.WriteLine(
+                    $"{currentTrajectory.type.ToString()}," +
+                    $"{currentTrajectory.trajectoryStartTime.ToString("F5")}");
+
+                trajectoriesCsvFile.Flush();
                 //keep a maximum of 1000 records
-                if (allTrajectoryRecords.Count > 1000)
+                if (allTrajectoryRecords.Count > 999)
                 {
-                    allTrajectoryRecords.RemoveAt(0);
                     RecordAlarms = false;
                 }
             }
 
+            //update the Summary section for this session
+            int totalTrajectories = allTrajectoryRecords.Count;
+            int totalAlarms = FalseAlarms.Count;
 
+            float falseAlarmRate = totalTrajectories > 0
+                ? (float)totalAlarms / totalTrajectories
+                : 0f;
+            // Update Summary.csv
+            UpdateSummaryFile();
         }
+    }
+
+    private void UpdateSummaryFile()
+    {
+        if (summaryCsvFile == null || currentSessionFolder == null)
+            return;
+
+
+        string summaryPath = Path.Combine(
+            currentSessionFolder,
+            "Summary.csv");
+
+
+        int totalTrajectories = allTrajectoryRecords.Count;
+        int totalAlarms = FalseAlarms.Count;
+
+
+        float falseAlarmRate = totalTrajectories > 0
+            ? (float)totalAlarms / totalTrajectories
+            : 0f;
+
+
+        // Close current writer before overwriting
+        summaryCsvFile.Dispose();
+
+
+        summaryCsvFile = new StreamWriter(summaryPath, false);
+
+
+        summaryCsvFile.WriteLine(
+            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Trajectories,Total Alarms,False Alarm Rate,Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
+
+
+        summaryCsvFile.WriteLine(
+            $"{((predictor.predictionMode == PredictionMode.ADE || predictor.predictionMode == PredictionMode.FDE) ? predictor.OODThresholdEuclidean : predictor.OODThresholdLCSS):F5}," +
+            $"{((predictor.predictionMode == PredictionMode.ADE || predictor.predictionMode == PredictionMode.FDE) ? predictor.cusumNoiseAlignmentEuclidean : predictor.cusumNoiseAlignmentLCSS):F5}," +
+            $"{predictor.predictionMode.ToString()}," +
+            $"{totalTrajectories}," +
+            $"{totalAlarms}," +
+            $"{falseAlarmRate:F5}," +
+            $"{(observationNoisePresent ? "True" : "False")}," +
+            $"{(observationAnomaliesPresent ? "True" : "False")}," +
+            $"{(motionBiasPresent ? "True" : "False")}," +
+            $"{(throttleNoisePresent ? "True" : "False")}," +
+            $"{(laneOscillationPresent ? "True" : "False")}");
+
+        summaryCsvFile.Flush();
     }
 
     public enum TrajectoryType
@@ -287,12 +416,22 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
             //only add it to all records if we're in-distribution
             if (!predictor.ood)
+            {
                 allTrajectoryRecords.Add(newRecord);
+                if (trajectoriesCsvFile != null)
+                {
+                    trajectoriesCsvFile.WriteLine(
+                        $"{newRecord.type.ToString()}," +
+                        $"{newRecord.trajectoryStartTime.ToString("F5")}");
+
+
+                    trajectoriesCsvFile.Flush();
+                }
+            }
 
             //keep a maximum of 1000 records
-            if (allTrajectoryRecords.Count > 1000)
+            if (allTrajectoryRecords.Count > 999)
             {
-                allTrajectoryRecords.RemoveAt(0);
                 RecordAlarms = false;
             }
 
