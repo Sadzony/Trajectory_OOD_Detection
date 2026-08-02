@@ -45,6 +45,7 @@ public class TrajectoryRecord
 
 public class TrajectoryPredictor : MonoBehaviour
 {
+    [SerializeField] FalseAlarmRateRecorder FARrecorder;
     public TMPro.TMP_InputField cusumValueField;
     public TMPro.TMP_InputField errorValueField;
     [Header("References")]
@@ -57,9 +58,9 @@ public class TrajectoryPredictor : MonoBehaviour
 
     [Header("CUSUM")]
     [SerializeField] public double cusumNoiseAlignmentEuclidean = 0.15;
-    [SerializeField] public double cusumNoiseAlignmentEuclideanWhenNoisy = 0.05;
+    //[SerializeField] public double cusumNoiseAlignmentEuclideanWhenNoisy = 0.05;
     [SerializeField] public double cusumNoiseAlignmentLCSS = 0.015;
-    [SerializeField] public double cusumNoiseAlignmentLCSSWhenNoisy = 0.005;
+    //[SerializeField] public double cusumNoiseAlignmentLCSSWhenNoisy = 0.005;
     [SerializeField] double cumulativeErrorSum = 0.0;
     [SerializeField] public double OODThresholdEuclidean = 2.0;
     [SerializeField] public double OODThresholdLCSS = 0.2;
@@ -107,7 +108,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
     float biggestError = 0.0f;
 
-    bool ood = false;
+    public bool ood = false;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -182,6 +183,9 @@ public class TrajectoryPredictor : MonoBehaviour
                 ((predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal) && cumulativeErrorSum > OODThresholdLCSS))
             {
                 Debug.Log("OOD Engaged");
+                FARrecorder.RecordAlarmTrigger();
+                
+
                 //generate first ctra traj
                 currentTrajectory = GenerateCTRATrajectory();
                 //clear transition trajectories

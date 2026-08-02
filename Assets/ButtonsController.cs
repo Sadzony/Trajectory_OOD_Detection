@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using TMPro;
 public class ButtonsController : MonoBehaviour
 {
+    public FalseAlarmRateRecorder farRecorder;
+
     public LaneDefinedMovementQuintic car;
-    public TrailOffBehaviour traillOffBehaviour;
+    public TrailOffBehaviour trailOffBehaviour;
     public ZigZagLaneBehaviour zigZagLaneBehaviour;
     public ZigZagRoadBehaviour zigZagRoadBehaviour;
     public LossOfControlBehaviour lossOfControlBehaviour;
@@ -41,7 +43,7 @@ public class ButtonsController : MonoBehaviour
     }
     public void ResumeDefaultBehaviour()
     {
-        traillOffBehaviour.enabled = false;
+        trailOffBehaviour.enabled = false;
         zigZagLaneBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = false;
         lossOfControlBehaviour.enabled = false;
@@ -56,7 +58,7 @@ public class ButtonsController : MonoBehaviour
     public void Brake()
     {
         car.enabled = true;
-        traillOffBehaviour.enabled = false;
+        trailOffBehaviour.enabled = false;
         zigZagLaneBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = false;
         lossOfControlBehaviour.enabled = false;
@@ -73,7 +75,7 @@ public class ButtonsController : MonoBehaviour
         car.enabled = true;
         zigZagLaneBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = false;
-        traillOffBehaviour.enabled = false;
+        trailOffBehaviour.enabled = false;
         lossOfControlBehaviour.enabled = false;
 
         car.TriggerCutThroughTraffic();
@@ -85,7 +87,7 @@ public class ButtonsController : MonoBehaviour
         zigZagLaneBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = false;
         lossOfControlBehaviour.enabled = false;
-        traillOffBehaviour.enabled = true;
+        trailOffBehaviour.enabled = true;
         if (!intermittentOODEnabled)
         {
             DefaultBehaviourButton.interactable = true;
@@ -94,7 +96,7 @@ public class ButtonsController : MonoBehaviour
     public void TriggerZigZagLane()
     {
         car.enabled = false;
-        traillOffBehaviour.enabled = false;
+        trailOffBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = false;
         zigZagLaneBehaviour.enabled = true;
         if (!intermittentOODEnabled)
@@ -105,7 +107,7 @@ public class ButtonsController : MonoBehaviour
     public void TriggerZigZagRoad()
     {
         car.enabled = false;
-        traillOffBehaviour.enabled = false;
+        trailOffBehaviour.enabled = false;
         zigZagLaneBehaviour.enabled = false;
         lossOfControlBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = true;
@@ -118,7 +120,7 @@ public class ButtonsController : MonoBehaviour
     public void TriggerLossOfControl()
     {
         car.enabled = false;
-        traillOffBehaviour.enabled = false;
+        trailOffBehaviour.enabled = false;
         zigZagLaneBehaviour.enabled = false;
         zigZagRoadBehaviour.enabled = false;
         if (!intermittentOODEnabled)
@@ -186,7 +188,7 @@ public class ButtonsController : MonoBehaviour
             currentBehaviour = CarBehaviours.Brake;
         else if (car.enabled && car.cuttingLanes)
             currentBehaviour = CarBehaviours.Cut;
-        else if (car.enabled == false && traillOffBehaviour.enabled == true)
+        else if (car.enabled == false && trailOffBehaviour.enabled == true)
             currentBehaviour = CarBehaviours.TrailOff;
         else if (car.enabled == false && zigZagLaneBehaviour.enabled == true)
             currentBehaviour = CarBehaviours.ZigZagLane;

@@ -7441,6 +7441,7 @@ MonoBehaviour:
   anomalyMaximumHeadingMagnitude: 3.5
   anomalyOccurancePeriodMinimum: 4
   anomalyOccurancePeriodMaximum: 7.5
+  ood: 0
 --- !u!120 &1329216787
 LineRenderer:
   serializedVersion: 3
@@ -7549,6 +7550,29 @@ LineRenderer:
   m_UseWorldSpace: 1
   m_Loop: 0
   m_ApplyActiveColorSpace: 1
+--- !u!114 &1329216788
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1329216780}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f40b2698eaf200a40995654082527d58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  observationNoisePresent: 0
+  observationAnomaliesPresent: 0
+  motionBiasPresent: 0
+  throttleNoisePresent: 0
+  laneOscillationPresent: 0
+  car: {fileID: 1653004210}
+  predictor: {fileID: 1329216786}
+  zigZagLaneBehaviour: {fileID: 1653004215}
+  zigZagRoadBehaviour: {fileID: 1653004216}
+  trailOffBehaviour: {fileID: 1653004211}
+  lossOfControlBehaviour: {fileID: 1653004220}
 --- !u!1 &1337790323
 GameObject:
   m_ObjectHideFlags: 0
@@ -8465,8 +8489,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9c6223add4d429a4b876921bb50dea12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ButtonsController
+  farRecorder: {fileID: 1329216788}
   car: {fileID: 1653004210}
-  traillOffBehaviour: {fileID: 1653004211}
+  trailOffBehaviour: {fileID: 1653004211}
   zigZagLaneBehaviour: {fileID: 1653004215}
   zigZagRoadBehaviour: {fileID: 1653004216}
   lossOfControlBehaviour: {fileID: 1653004220}
@@ -12871,6 +12896,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7888239390082750638, guid: 17afd4eef45849a4ebcc4d747fd2305d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1329216787}
+    - targetCorrespondingSourceObject: {fileID: 7888239390082750638, guid: 17afd4eef45849a4ebcc4d747fd2305d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1329216788}
   m_SourcePrefab: {fileID: 100100000, guid: 17afd4eef45849a4ebcc4d747fd2305d, type: 3}
 --- !u!1001 &9189951290191460297
 PrefabInstance:

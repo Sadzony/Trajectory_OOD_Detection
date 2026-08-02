@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class LaneDefinedMovementQuintic : MonoBehaviour
 {
-
+    [SerializeField] private FalseAlarmRateRecorder FARrecorder;
 
     [SerializeField] private float vehicleLength;
 
@@ -200,6 +200,8 @@ private float targetCruiseOscillationMagnitude;
 
         longitudinalState = LongitudinalState.Cruise;
 
+        FARrecorder.RecordStartedTrajectory(FalseAlarmRateRecorder.TrajectoryType.LaneFollow);
+
         nextLaneChangeTime = Random.Range(
             minCruiseTimeChangeLane,
             maxCruiseTimeChangeLane);
@@ -353,6 +355,7 @@ private float targetCruiseOscillationMagnitude;
         laneChangeTargetX = currentCentreLine.position.x;
 
         laneChangeInitialVelocity = velocity;
+        FARrecorder.RecordStartedTrajectory(FalseAlarmRateRecorder.TrajectoryType.LaneChange);
     }
 
 
@@ -389,7 +392,7 @@ private float targetCruiseOscillationMagnitude;
         else
         {
             float speedScale = 1.0f;
-            if (velocity < laneChangeInitialVelocity)
+            if (velocity < laneChangeInitialVelocity && (longitudinalState == LongitudinalState.Braking || longitudinalState == LongitudinalState.Stopped))
             {
                 speedScale = velocity > stopThreshold
                     ? velocity / laneChangeInitialVelocity
@@ -402,6 +405,10 @@ private float targetCruiseOscillationMagnitude;
 
             if (u >= 1f)
             {
+                if(!cuttingLanes)
+                {
+                    FARrecorder.RecordStartedTrajectory(FalseAlarmRateRecorder.TrajectoryType.LaneFollow);
+                }
                 if (!cutLaneEntered)
                     cutLaneEntered = true;
                 else if (cuttingLanes)
