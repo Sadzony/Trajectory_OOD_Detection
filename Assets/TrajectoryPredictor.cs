@@ -171,7 +171,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 biggestError = (float)currentTrajectoryError;
             }
             errorValueField.text = currentTrajectoryError.ToString("F5");
-            if (currentTrajectoryError > 0 && transitions && !currentTrajectory.isLaneSettle)
+            if (currentTrajectoryError > 0 && transitions)
             {
 
                 //2 Transition to a different, or stay on current trajectory, based on error measure

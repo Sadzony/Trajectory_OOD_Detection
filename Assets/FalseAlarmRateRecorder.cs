@@ -253,6 +253,24 @@ public class FalseAlarmRateRecorder : MonoBehaviour
     private List<FalseAlarmRecord> FalseAlarms = new List<FalseAlarmRecord>();
     public void RecordAlarmTrigger()
     {
+        //1. Determine the car's current behaviour
+        if (car.enabled == true && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Braking && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Stopped && !car.cuttingLanes)
+            currentBehaviour = CarBehaviours.Standard;
+        else if (car.enabled == true && (car.longitudinalState == LaneDefinedMovementQuintic.LongitudinalState.Braking || car.longitudinalState == LaneDefinedMovementQuintic.LongitudinalState.Stopped))
+            currentBehaviour = CarBehaviours.Brake;
+        else if (car.enabled && car.cuttingLanes)
+            currentBehaviour = CarBehaviours.Cut;
+        else if (car.enabled == false && trailOffBehaviour.enabled == true)
+            currentBehaviour = CarBehaviours.TrailOff;
+        else if (car.enabled == false && zigZagLaneBehaviour.enabled == true)
+            currentBehaviour = CarBehaviours.ZigZagLane;
+        else if (car.enabled == false && zigZagRoadBehaviour.enabled == true)
+            currentBehaviour = CarBehaviours.ZigZagRoad;
+        else if (car.enabled == false && lossOfControlBehaviour.enabled == true)
+            currentBehaviour = CarBehaviours.LoseControl;
+        else
+            currentBehaviour = CarBehaviours.None;
+
         if (currentBehaviour == CarBehaviours.Standard && recordAlarms && alarmsCsvFile != null && summaryCsvFile != null &&
         currentSessionFolder != null && trajectoriesCsvFile != null)
         {

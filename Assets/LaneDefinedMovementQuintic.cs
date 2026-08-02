@@ -290,7 +290,7 @@ private float targetCruiseOscillationMagnitude;
                         //    brakingDeceleration);
                         //}
                         //else
-                        //{
+                        
                             acceleration = Mathf.Clamp(
                                 float.IsNaN(error / dt) ? 0f : error / dt,
                                 -brakingDeceleration,
@@ -312,6 +312,17 @@ private float targetCruiseOscillationMagnitude;
                     velocity = 0f;
                     break;
                 }
+        }
+
+        if (lateralState == LateralState.LaneChange && acceleration < 0 && longitudinalState != LongitudinalState.Braking && longitudinalState != LongitudinalState.Stopped)
+        {
+            if (throttleNoiseOn)
+                acceleration = -coastingDeceleration;
+            else acceleration = 0;
+        }
+        if(lateralState == LateralState.LaneChange && acceleration > 0 && velocity > speedLimitMinimum)
+        {
+            acceleration = 0;
         }
 
         velocity += acceleration * dt;
@@ -392,7 +403,7 @@ private float targetCruiseOscillationMagnitude;
         else
         {
             float speedScale = 1.0f;
-            if (velocity < laneChangeInitialVelocity && (longitudinalState == LongitudinalState.Braking || longitudinalState == LongitudinalState.Stopped))
+            if (velocity < laneChangeInitialVelocity && ((throttleNoiseOn && acceleration < coastingDeceleration) || (!throttleNoiseOn && acceleration < 0)))
             {
                 speedScale = velocity > stopThreshold
                     ? velocity / laneChangeInitialVelocity
