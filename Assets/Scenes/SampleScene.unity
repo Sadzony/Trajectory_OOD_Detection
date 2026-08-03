@@ -6920,6 +6920,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1248909201}
   - component: {fileID: 1248909202}
+  - component: {fileID: 1248909203}
   m_Layer: 5
   m_Name: Toggle (1)
   m_TagString: Untagged
@@ -6995,6 +6996,20 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 0
+--- !u!114 &1248909203
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1248909200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f07b6d775309774fa4cd250b2de96a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  toggle: {fileID: 0}
+  WADDrecorder: {fileID: 1329216794}
 --- !u!1 &1270758713
 GameObject:
   m_ObjectHideFlags: 0
@@ -7422,6 +7437,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   FARrecorder: {fileID: 1329216788}
+  WADDrecorder: {fileID: 1329216794}
   cusumValueField: {fileID: 928126821}
   errorValueField: {fileID: 1270758716}
   vehicleController: {fileID: 1653004210}
@@ -7576,11 +7592,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f40b2698eaf200a40995654082527d58, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  observationNoisePresent: 0
-  observationAnomaliesPresent: 0
-  motionBiasPresent: 0
-  throttleNoisePresent: 0
-  laneOscillationPresent: 0
+  farToggle: {fileID: 566799450}
+  car: {fileID: 1653004210}
+  predictor: {fileID: 1329216786}
+  zigZagLaneBehaviour: {fileID: 1653004215}
+  zigZagRoadBehaviour: {fileID: 1653004216}
+  trailOffBehaviour: {fileID: 1653004211}
+  lossOfControlBehaviour: {fileID: 1653004220}
+--- !u!114 &1329216794
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1329216780}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23c2c678fb4d94943a620d0794fddbe4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WADDRecorder
+  waddToggle: {fileID: 1248909202}
+  lastStableCUSUMTime: 0
   car: {fileID: 1653004210}
   predictor: {fileID: 1329216786}
   zigZagLaneBehaviour: {fileID: 1653004215}
@@ -12914,6 +12946,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7888239390082750638, guid: 17afd4eef45849a4ebcc4d747fd2305d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1329216788}
+    - targetCorrespondingSourceObject: {fileID: 7888239390082750638, guid: 17afd4eef45849a4ebcc4d747fd2305d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1329216794}
   m_SourcePrefab: {fileID: 100100000, guid: 17afd4eef45849a4ebcc4d747fd2305d, type: 3}
 --- !u!1001 &9189951290191460297
 PrefabInstance:

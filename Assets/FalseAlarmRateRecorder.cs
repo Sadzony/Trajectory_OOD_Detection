@@ -1,10 +1,14 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
+using UnityEngine.UI;
 
 public class FalseAlarmRateRecorder : MonoBehaviour
 {
+    [SerializeField] Toggle farToggle;
+
     private bool recordAlarms = false;
+
 
     public bool RecordAlarms
     {
@@ -15,6 +19,9 @@ public class FalseAlarmRateRecorder : MonoBehaviour
                 return;
 
             recordAlarms = value;
+
+            farToggle.isOn = value;
+
             OnRecordAlarmsChanged();
         }
     }
@@ -80,7 +87,7 @@ public class FalseAlarmRateRecorder : MonoBehaviour
         alarmsCsvFile = new StreamWriter(alarmsPath, false);
 
         alarmsCsvFile.WriteLine(
-            "Trajectory Type,Predicted TrajectoryType,Trajectory Start Time,Alarm Time,Time Within Trajectory");
+            "Trajectory Type,Predicted Trajectory Type,Target Speed,Vehicle Speed,Trajectory Start Time,Alarm Time,Time Within Trajectory,Latest Error");
 
         alarmsCsvFile.Flush();
 
@@ -132,11 +139,11 @@ public class FalseAlarmRateRecorder : MonoBehaviour
     private StreamWriter trajectoriesCsvFile;
     private StreamWriter alarmsCsvFile;
 
-    public bool observationNoisePresent;
-    public bool observationAnomaliesPresent;
-    public bool motionBiasPresent;
-    public bool throttleNoisePresent;
-    public bool laneOscillationPresent;
+    private bool observationNoisePresent;
+    private bool observationAnomaliesPresent;
+    private bool motionBiasPresent;
+    private bool throttleNoisePresent;
+    private bool laneOscillationPresent;
 
     public LaneDefinedMovementQuintic car;
     public TrajectoryPredictor predictor;
@@ -160,13 +167,33 @@ public class FalseAlarmRateRecorder : MonoBehaviour
         LoseControl
     }
 
-    float simulationTime;
+    float simulationTime = 0.0f;
     CarBehaviours currentBehaviour;
 
     CarBehaviours lastBehaviour = CarBehaviours.None;
 
     private void Start()
     {
+        if (predictor.addObservationNoise)
+            observationNoisePresent = true;
+        else observationNoisePresent = false;
+
+        if (predictor.addObservationAnomalies)
+            observationAnomaliesPresent = true;
+        else observationAnomaliesPresent = false;
+
+        if (car.addMotionBias)
+            motionBiasPresent = true;
+        else motionBiasPresent = false;
+
+        if (car.throttleNoiseOn)
+            throttleNoisePresent = true;
+        else throttleNoisePresent = false;
+
+        if (car.oscillate)
+            laneOscillationPresent = true;
+        else laneOscillationPresent = false;
+
         //1. Determine the car's current behaviour
         if (car.enabled == true && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Braking && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Stopped && !car.cuttingLanes)
             currentBehaviour = CarBehaviours.Standard;
@@ -189,7 +216,6 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
     void FixedUpdate()
     {
-        simulationTime += Time.fixedDeltaTime;
 
         if (predictor.addObservationNoise)
             observationNoisePresent = true;
@@ -232,6 +258,11 @@ public class FalseAlarmRateRecorder : MonoBehaviour
         lastBehaviour = currentBehaviour;
     }
 
+    public void UpdateSimulationTime(float simTime)
+    {
+        simulationTime = simTime;
+    }
+
 
     private class FalseAlarmRecord
     {
@@ -253,7 +284,27 @@ public class FalseAlarmRateRecorder : MonoBehaviour
     private List<FalseAlarmRecord> FalseAlarms = new List<FalseAlarmRecord>();
     public void RecordAlarmTrigger()
     {
-        //1. Determine the car's current behaviour
+        if (predictor.addObservationNoise)
+            observationNoisePresent = true;
+        else observationNoisePresent = false;
+
+        if (predictor.addObservationAnomalies)
+            observationAnomaliesPresent = true;
+        else observationAnomaliesPresent = false;
+
+        if (car.addMotionBias)
+            motionBiasPresent = true;
+        else motionBiasPresent = false;
+
+        if (car.throttleNoiseOn)
+            throttleNoisePresent = true;
+        else throttleNoisePresent = false;
+
+        if (car.oscillate)
+            laneOscillationPresent = true;
+        else laneOscillationPresent = false;
+
+        // Determine the car's current behaviour
         if (car.enabled == true && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Braking && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Stopped && !car.cuttingLanes)
             currentBehaviour = CarBehaviours.Standard;
         else if (car.enabled == true && (car.longitudinalState == LaneDefinedMovementQuintic.LongitudinalState.Braking || car.longitudinalState == LaneDefinedMovementQuintic.LongitudinalState.Stopped))
@@ -303,9 +354,13 @@ public class FalseAlarmRateRecorder : MonoBehaviour
             alarmsCsvFile.WriteLine(
             $"{currentTrajectory.type.ToString()}," +
             $"{newFARrecord.predictedTrajectoryType}," +
+            $"{car.GetTargetVelocity()}," +
+            $"{car.GetCurrentVelocity()}," +
             $"{currentTrajectory.trajectoryStartTime:F5}," +
             $"{newFARrecord.timeOfAlarm:F5}," +
-            $"{newFARrecord.durationInManouvre:F5}");
+            $"{newFARrecord.durationInManouvre:F5}," +
+            $"{predictor.GetLatestError():F5}"
+            );
 
 
             //check if the current record actually exists (the only case this happens is when we just exited OOD and triggered it again before the manouvre finished)
@@ -403,7 +458,27 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
     public void RecordStartedTrajectory(TrajectoryType type)
     {
-        //1. Determine the car's current behaviour
+        if (predictor.addObservationNoise)
+            observationNoisePresent = true;
+        else observationNoisePresent = false;
+
+        if (predictor.addObservationAnomalies)
+            observationAnomaliesPresent = true;
+        else observationAnomaliesPresent = false;
+
+        if (car.addMotionBias)
+            motionBiasPresent = true;
+        else motionBiasPresent = false;
+
+        if (car.throttleNoiseOn)
+            throttleNoisePresent = true;
+        else throttleNoisePresent = false;
+
+        if (car.oscillate)
+            laneOscillationPresent = true;
+        else laneOscillationPresent = false;
+
+        // Determine the car's current behaviour
         if (car.enabled == true && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Braking && car.longitudinalState != LaneDefinedMovementQuintic.LongitudinalState.Stopped && !car.cuttingLanes)
             currentBehaviour = CarBehaviours.Standard;
         else if (car.enabled == true && (car.longitudinalState == LaneDefinedMovementQuintic.LongitudinalState.Braking || car.longitudinalState == LaneDefinedMovementQuintic.LongitudinalState.Stopped))

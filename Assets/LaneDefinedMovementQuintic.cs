@@ -314,13 +314,13 @@ private float targetCruiseOscillationMagnitude;
                 }
         }
 
-        if (lateralState == LateralState.LaneChange && acceleration < 0 && longitudinalState != LongitudinalState.Braking && longitudinalState != LongitudinalState.Stopped)
+        if (lateralState == LateralState.LaneChange && acceleration < 0 && longitudinalState != LongitudinalState.Braking && longitudinalState != LongitudinalState.Stopped && !brakingDuringLaneChange)
         {
             if (throttleNoiseOn)
                 acceleration = -coastingDeceleration;
             else acceleration = 0;
         }
-        if(lateralState == LateralState.LaneChange && acceleration > 0 && velocity > speedLimitMinimum)
+        if(lateralState == LateralState.LaneChange && acceleration > 0 && velocity > speedLimitMinimum && !brakingDuringLaneChange)
         {
             acceleration = 0;
         }
@@ -371,6 +371,7 @@ private float targetCruiseOscillationMagnitude;
 
 
     //quintic change lane trajectory
+    private bool brakingDuringLaneChange;
     private void UpdateLateralTrajectory(float dt)
     {
         if (lateralState != LateralState.LaneChange)
@@ -403,11 +404,22 @@ private float targetCruiseOscillationMagnitude;
         else
         {
             float speedScale = 1.0f;
-            if (velocity < laneChangeInitialVelocity && ((throttleNoiseOn && acceleration < coastingDeceleration) || (!throttleNoiseOn && acceleration < 0)))
+            if (velocity < laneChangeInitialVelocity)
             {
-                speedScale = velocity > stopThreshold
-                    ? velocity / laneChangeInitialVelocity
-                    : 0f;
+                if (longitudinalState == LongitudinalState.Braking || longitudinalState == LongitudinalState.Stopped || brakingDuringLaneChange)
+                {
+                    speedScale = velocity > stopThreshold
+                        ? velocity / laneChangeInitialVelocity
+                        : 0f;
+                }
+                else if (
+                    ((throttleNoiseOn && acceleration < coastingDeceleration) || (!throttleNoiseOn && acceleration < 0))
+                    )
+                {
+                    speedScale = velocity > stopThreshold
+                        ? velocity / laneChangeInitialVelocity
+                        : 0f;
+                }
             }
 
             laneChangeTime += dt * speedScale;
@@ -416,7 +428,8 @@ private float targetCruiseOscillationMagnitude;
 
             if (u >= 1f)
             {
-                if(!cuttingLanes)
+                brakingDuringLaneChange = false;
+                if (!cuttingLanes)
                 {
                     FARrecorder.RecordStartedTrajectory(FalseAlarmRateRecorder.TrajectoryType.LaneFollow);
                 }
@@ -485,6 +498,8 @@ private float targetCruiseOscillationMagnitude;
         {
             targetCruiseOscillationMagnitude = 0.0f;
             longitudinalState = LongitudinalState.Braking;
+            if (lateralState == LateralState.LaneChange)
+                brakingDuringLaneChange = true;
         }
     }
 
@@ -549,6 +564,9 @@ private float targetCruiseOscillationMagnitude;
         }
         if (!addMotionBias)
             motionBias = 1.0f;
+
+        if (longitudinalState == LongitudinalState.Braking || longitudinalState == LongitudinalState.Stopped)
+            brakingDuringLaneChange = true;
 
         // Reset timer.
         timeSpentCruising = 0f;

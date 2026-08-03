@@ -34,18 +34,21 @@ public class Trajectory
     public bool isLaneSettle = false;
 }
 
-public class TrajectoryRecord
-{
-    public Trajectory trajectory { get; set; }
-    public double error { get; set; }
-    public List<VehicleState> observations { get; set; }
-
-    public int trajectoryAnchorIndex;
-}
-
 public class TrajectoryPredictor : MonoBehaviour
 {
+
+    private class TrajectoryRecord
+    {
+        public Trajectory trajectory { get; set; }
+        public double error { get; set; }
+        public List<VehicleState> observations { get; set; }
+
+        public int trajectoryAnchorIndex;
+    }
+
+
     [SerializeField] FalseAlarmRateRecorder FARrecorder;
+    [SerializeField] WADDRecorder WADDrecorder;
     public TMPro.TMP_InputField cusumValueField;
     public TMPro.TMP_InputField errorValueField;
     [Header("References")]
@@ -128,10 +131,15 @@ public class TrajectoryPredictor : MonoBehaviour
 
     }
 
+    public double GetLatestError() => latestError;
+    double latestError = 0.0;
     // Update is called once per frame
     void FixedUpdate()
     {
         simulationTime += Time.fixedDeltaTime;
+        FARrecorder.UpdateSimulationTime(simulationTime);
+        WADDrecorder.UpdateSimulationTime(simulationTime);
+
         Observations = ObserveVehicle();
 
         var latestObservation = Observations[Observations.Count - 1];
@@ -170,12 +178,19 @@ public class TrajectoryPredictor : MonoBehaviour
                 Debug.Log(currentTrajectoryError);
                 biggestError = (float)currentTrajectoryError;
             }
-            errorValueField.text = currentTrajectoryError.ToString("F5");
             if (currentTrajectoryError > 0 && transitions)
             {
 
                 //2 Transition to a different, or stay on current trajectory, based on error measure
                 currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, currentTrajectoryAnchorIndex, TransitionTrajectories);
+            }
+            currentTrajectoryError = FindErrorMeasure(currentTrajectory, currentTrajectoryAnchorIndex, currentTrajectoryMinIndex, Observations);
+            errorValueField.text = currentTrajectoryError.ToString("F5");
+            latestError = currentTrajectoryError;
+
+            if (Mathf.Approximately((float)cumulativeErrorSum, 0.0f))
+            {
+                WADDrecorder.UpdateLastStableCUSUM();
             }
 
             //enage ood
@@ -184,6 +199,7 @@ public class TrajectoryPredictor : MonoBehaviour
             {
                 Debug.Log("OOD Engaged");
                 FARrecorder.RecordAlarmTrigger();
+                WADDrecorder.RecordAlarmTrigger();
                 
 
                 //generate first ctra traj
