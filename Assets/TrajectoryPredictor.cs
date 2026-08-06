@@ -197,7 +197,7 @@ public class TrajectoryPredictor : MonoBehaviour
             if (((predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE) && cumulativeErrorSum > OODThresholdEuclidean) ||
                 ((predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal) && cumulativeErrorSum > OODThresholdLCSS))
             {
-                Debug.Log("OOD Engaged");
+                Debug.Log("OOD Engaged at value: " + cumulativeErrorSum + " and Error: " + currentTrajectoryError);
                 FARrecorder.RecordAlarmTrigger();
                 WADDrecorder.RecordAlarmTrigger();
                 
@@ -264,6 +264,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
                     cumulativeErrorSum =
                         simulatedCusum;
+
+                    Debug.Log("Back In Distribution at cusum value: " + cumulativeErrorSum);
 
 
                     currentTrajectory =
@@ -665,7 +667,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 if (trajectory.states.Count == 0)
                     continue;
 
-                int anchorIndex = FindClosestIndex(trajectory.states, tLatest);
+                int anchorIndex = FindClosestIndex(trajectory.states, tLatest); 
                 int minIndex = FindClosestIndexLowest(trajectory.states, Mathf.Max(0, tLatest - vehicleController.GetManouvreDuration()));
                 float halfLength = vehicleController.GetVehicleLength() / 2;
 
@@ -926,6 +928,8 @@ public class TrajectoryPredictor : MonoBehaviour
                 double bestFinalCusum = double.PositiveInfinity;
                 TrajectoryRecord? bestRecord = currentTrajectoryRecord;
 
+                double cusum = 0.0;
+
                 foreach (var record in topRecords)
                 {
                     // Find where this trajectory begins inside the observation history.
@@ -948,24 +952,29 @@ public class TrajectoryPredictor : MonoBehaviour
                         })
                         .ToList();
 
-                    double cusum =
+                    cusum =
                         simulatedObservations[startObservationIndex].recordedCusum ?? 0.0;
 
                     int anchorIndex = record.trajectoryAnchorIndex;
 
-                    for (int obsIndex = simulatedObservations.Count - 1;
-                         obsIndex >= startObservationIndex;
-                         obsIndex--)
+
+
+                    for (int obsIndex = startObservationIndex;
+                         obsIndex <= simulatedObservations.Count - 1;
+                         obsIndex++)
                     {
                         VehicleState obs = simulatedObservations[obsIndex];
 
-                        int minIndex = FindClosestIndexLowest(
+                        int maxIndex =
+                            FindClosestIndex(
                             record.trajectory.states,
-                            Mathf.Max(0f, obs.t - vehicleController.GetManouvreDuration()));
+                            obs.t);
+
+                        int minIndex = 0;
 
                         double error = FindErrorMeasure(
                             record.trajectory,
-                            anchorIndex,
+                            maxIndex,
                             minIndex,
                             simulatedObservations.GetRange(startObservationIndex,
                                 obsIndex - startObservationIndex + 1));
@@ -2335,13 +2344,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
 
 
-            int minIndex =
-                FindClosestIndexLowest(
-                    trajectory.states,
-                    Mathf.Max(
-                        0,
-                        obs.t -
-                        vehicleController.GetManouvreDuration()));
+            int minIndex = 0;
 
 
 
