@@ -955,10 +955,6 @@ public class TrajectoryPredictor : MonoBehaviour
                     cusum =
                         simulatedObservations[startObservationIndex].recordedCusum ?? 0.0;
 
-                    int anchorIndex = record.trajectoryAnchorIndex;
-
-
-
                     for (int obsIndex = startObservationIndex;
                          obsIndex <= simulatedObservations.Count - 1;
                          obsIndex++)
@@ -976,8 +972,8 @@ public class TrajectoryPredictor : MonoBehaviour
                             record.trajectory,
                             maxIndex,
                             minIndex,
-                            simulatedObservations.GetRange(startObservationIndex,
-                                obsIndex - startObservationIndex + 1));
+                            simulatedObservations.GetRange(0,
+                                obsIndex + 1));
 
                         cusum += error;
                         if (predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE)
@@ -986,12 +982,6 @@ public class TrajectoryPredictor : MonoBehaviour
                             cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentLCSS : cusum - cusumNoiseAlignmentLCSS);
 
                         obs.recordedCusum = cusum;
-
-                        // Move trajectory anchor backwards one sample because
-                        // we're replaying backwards through time.
-                        anchorIndex--;
-                        if (anchorIndex < 0)
-                            break;
                     }
 
                     if (cusum < bestFinalCusum)
