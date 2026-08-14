@@ -52,20 +52,47 @@ public class WADDRecorder : MonoBehaviour
     public LossOfControlBehaviour lossOfControlBehaviour;
 
     private float brakeWadd = 0.0f;
+    private float brakeMedianWadd = 0.0f;
+
     private float trailOffWadd = 0.0f;
+    private float trailOffMedianWadd = 0.0f;
+
     private float zigZagLaneWadd = 0.0f;
+    private float zigZagLaneMedianWadd = 0.0f;
+
     private float zigZagRoadWadd = 0.0f;
+    private float zigZagRoadMedianWadd = 0.0f;
+
     private float cuttingWadd = 0.0f;
+    private float cuttingMedianWadd = 0.0f;
+
     private float lossOfControlWadd = 0.0f;
+    private float lossOfControlMedianWadd = 0.0f;
+
     private float overallWadd = 0.0f;
+    private float overallMedianWadd = 0.0f;
+
 
     private float brakeAverageDifference = 0.0f;
+    private float brakeMedianDifference = 0.0f;
+
     private float trailOffAverageDifference = 0.0f;
+    private float trailOffMedianDifference = 0.0f;
+
     private float zigZagLaneAverageDifference = 0.0f;
+    private float zigZagLaneMedianDifference = 0.0f;
+
     private float zigZagRoadAverageDifference = 0.0f;
+    private float zigZagRoadMedianDifference = 0.0f;
+
     private float cuttingAverageDifference = 0.0f;
+    private float cuttingMedianDifference = 0.0f;
+
     private float lossOfControlAverageDifference = 0.0f;
+    private float lossOfControlMedianDifference = 0.0f;
+
     private float overallAverageDifference = 0.0f;
+    private float overallMedianDifference = 0.0f;
     private enum CarBehaviours
     {
         None,
@@ -129,9 +156,15 @@ public class WADDRecorder : MonoBehaviour
 
         summaryCsvFile = new StreamWriter(summaryPath, false);
 
-        summaryCsvFile.WriteLine(
-            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Manouvres,WADD (Overall),Average Difference (Overall),Total Brake Manouvres,WADD Brake,Average Difference (Brake),Total Cutting Lane Manouvres,WADD Cutting Lane,Average Difference (Cutting),Total Trail-Off Manouvres,WADD Trail-Off,Average Difference (Trail-Off),Total Zig-Zag Lane Manouvres,WADD Zig-Zag Lane,Average Difference (Zig-Zag Lane),Total Zig-Zag Road Manouvres,WADD Zig-Zag Road,Average Difference (Zig-Zag Road),Total Loss-Of-Control Manouvres,WADD Loss-Of-Control,Average Difference (Loss-Of-Control),Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
-
+        summaryCsvFile.WriteLine("CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method," + 
+            "Total Manouvres,WADD (Overall),Median WADD (Overall),Average Difference (Overall),Median Difference (Overall)," + 
+            "Total Brake Manouvres,WADD Brake,Median WADD Brake,Average Difference (Brake),Median Difference (Brake)," + 
+            "Total Cutting Lane Manouvres,WADD Cutting Lane,Median WADD Cutting Lane,Average Difference (Cutting),Median Difference (Cutting)," + 
+            "Total Trail-Off Manouvres,WADD Trail-Off,Median WADD Trail-Off,Average Difference (Trail-Off),Median Difference (Trail-Off)," + 
+            "Total Zig-Zag Lane Manouvres,WADD Zig-Zag Lane,Median WADD Zig-Zag Lane,Average Difference (Zig-Zag Lane),Median Difference (Zig-Zag Lane)," + 
+            "Total Zig-Zag Road Manouvres,WADD Zig-Zag Road,Median WADD Zig-Zag Road,Average Difference (Zig-Zag Road),Median Difference (Zig-Zag Road)," + 
+            "Total Loss-Of-Control Manouvres,WADD Loss-Of-Control,Median WADD Loss-Of-Control,Average Difference (Loss-Of-Control),Median Difference (Loss-Of-Control)," +
+            "Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
         summaryCsvFile.Flush();
 
 
@@ -273,6 +306,12 @@ public class WADDRecorder : MonoBehaviour
         else
             currentBehaviour = CarBehaviours.None;
 
+        if (currentBehaviour == CarBehaviours.Standard || !recordWadd)
+        {
+            lastBehaviour = currentBehaviour;
+            return;
+        }
+
         if (lastBehaviour == CarBehaviours.Standard && currentBehaviour != CarBehaviours.Standard)
             RecordOODManouvre(currentBehaviour);
 
@@ -343,12 +382,22 @@ public class WADDRecorder : MonoBehaviour
         else
             currentBehaviour = CarBehaviours.None;
 
-        if (lastBehaviour == CarBehaviours.Standard && currentBehaviour != CarBehaviours.Standard)
+        if (currentBehaviour == CarBehaviours.Standard || !recordWadd)
+        {
+            lastBehaviour = currentBehaviour;
+            return;
+        }
+
+        if (lastBehaviour == CarBehaviours.Standard)
             RecordOODManouvre(currentBehaviour);
 
         lastBehaviour = currentBehaviour;
 
-        if(currentBehaviour != CarBehaviours.Standard && recordWadd && summaryCsvFile != null && oodManouvresCsvFile != null && currentSessionFolder != null && currentBehaviour != CarBehaviours.None)
+        if (currentManouvre.isRecorded != false)
+            return;
+        else currentManouvre.isRecorded = true;
+
+        if(summaryCsvFile != null && oodManouvresCsvFile != null && currentSessionFolder != null && currentBehaviour != CarBehaviours.None)
         {
             var newOODRecord = new OODRecord();
 
@@ -372,7 +421,13 @@ public class WADDRecorder : MonoBehaviour
 
             newOODRecord.errorMeasureMethod = predictor.predictionMode;
 
-            newOODRecord.instabilityStartTime = lastStableCUSUMTime;
+
+            if (lastStableCUSUMTime > newOODRecord.timeOfManouvre)
+                newOODRecord.instabilityStartTime = lastStableCUSUMTime;
+            else
+                newOODRecord.instabilityStartTime = newOODRecord.timeOfManouvre;
+            
+
             newOODRecord.timeUntilAlarmRaised =
                 simulationTime - lastStableCUSUMTime;
 
@@ -404,78 +459,151 @@ public class WADDRecorder : MonoBehaviour
             switch (newOODRecord.oodType)
             {
                 case CarBehaviours.Brake:
-                    brakeWadd = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.Brake)
-                        .Average(r => r.timeUntilAlarmRaised);
+                    {
+                        var records = OODRecords
+                            .Where(r => r.oodType == CarBehaviours.Brake)
+                            .ToList();
 
-                    brakeAverageDifference = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.Brake)
-                        .Average(r => r.differenceFromManouvreTime);
-                    break;
+                        brakeWadd = (float)records
+                            .Average(r => r.timeUntilAlarmRaised);
+
+                        brakeMedianWadd = CalculateMedian(
+                            records.Select(r => r.timeUntilAlarmRaised));
+
+                        brakeAverageDifference = (float)records
+                            .Average(r => r.differenceFromManouvreTime);
+
+                        brakeMedianDifference = CalculateMedian(
+                            records.Select(r => r.differenceFromManouvreTime));
+
+                        break;
+                    }
 
                 case CarBehaviours.TrailOff:
-                    trailOffWadd = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.TrailOff)
-                        .Average(r => r.timeUntilAlarmRaised);
+                    {
+                        var records = OODRecords
+                            .Where(r => r.oodType == CarBehaviours.TrailOff)
+                            .ToList();
 
-                    trailOffAverageDifference = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.TrailOff)
-                        .Average(r => r.differenceFromManouvreTime);
-                    break;
+                        trailOffWadd = (float)records
+                            .Average(r => r.timeUntilAlarmRaised);
+
+                        trailOffMedianWadd = CalculateMedian(
+                            records.Select(r => r.timeUntilAlarmRaised));
+
+                        trailOffAverageDifference = (float)records
+                            .Average(r => r.differenceFromManouvreTime);
+
+                        trailOffMedianDifference = CalculateMedian(
+                            records.Select(r => r.differenceFromManouvreTime));
+
+                        break;
+                    }
 
                 case CarBehaviours.ZigZagLane:
-                    zigZagLaneWadd = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.ZigZagLane)
-                        .Average(r => r.timeUntilAlarmRaised);
+                    {
+                        var records = OODRecords
+                            .Where(r => r.oodType == CarBehaviours.ZigZagLane)
+                            .ToList();
 
-                    zigZagLaneAverageDifference = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.ZigZagLane)
-                        .Average(r => r.differenceFromManouvreTime);
-                    break;
+                        zigZagLaneWadd = (float)records
+                            .Average(r => r.timeUntilAlarmRaised);
+
+                        zigZagLaneMedianWadd = CalculateMedian(
+                            records.Select(r => r.timeUntilAlarmRaised));
+
+                        zigZagLaneAverageDifference = (float)records
+                            .Average(r => r.differenceFromManouvreTime);
+
+                        zigZagLaneMedianDifference = CalculateMedian(
+                            records.Select(r => r.differenceFromManouvreTime));
+
+                        break;
+                    }
 
                 case CarBehaviours.ZigZagRoad:
-                    zigZagRoadWadd = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.ZigZagRoad)
-                        .Average(r => r.timeUntilAlarmRaised);
+                    {
+                        var records = OODRecords
+                            .Where(r => r.oodType == CarBehaviours.ZigZagRoad)
+                            .ToList();
 
-                    zigZagRoadAverageDifference = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.ZigZagRoad)
-                        .Average(r => r.differenceFromManouvreTime);
-                    break;
+                        zigZagRoadWadd = (float)records
+                            .Average(r => r.timeUntilAlarmRaised);
+
+                        zigZagRoadMedianWadd = CalculateMedian(
+                            records.Select(r => r.timeUntilAlarmRaised));
+
+                        zigZagRoadAverageDifference = (float)records
+                            .Average(r => r.differenceFromManouvreTime);
+
+                        zigZagRoadMedianDifference = CalculateMedian(
+                            records.Select(r => r.differenceFromManouvreTime));
+
+                        break;
+                    }
 
                 case CarBehaviours.Cut:
-                    cuttingWadd = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.Cut)
-                        .Average(r => r.timeUntilAlarmRaised);
+                    {
+                        var records = OODRecords
+                            .Where(r => r.oodType == CarBehaviours.Cut)
+                            .ToList();
 
-                    cuttingAverageDifference = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.Cut)
-                        .Average(r => r.differenceFromManouvreTime);
-                    break;
+                        cuttingWadd = (float)records
+                            .Average(r => r.timeUntilAlarmRaised);
+
+                        cuttingMedianWadd = CalculateMedian(
+                            records.Select(r => r.timeUntilAlarmRaised));
+
+                        cuttingAverageDifference = (float)records
+                            .Average(r => r.differenceFromManouvreTime);
+
+                        cuttingMedianDifference = CalculateMedian(
+                            records.Select(r => r.differenceFromManouvreTime));
+
+                        break;
+                    }
 
                 case CarBehaviours.LoseControl:
-                    lossOfControlWadd = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.LoseControl)
-                        .Average(r => r.timeUntilAlarmRaised);
+                    {
+                        var records = OODRecords
+                            .Where(r => r.oodType == CarBehaviours.LoseControl)
+                            .ToList();
 
-                    lossOfControlAverageDifference = (float)OODRecords
-                        .Where(r => r.oodType == CarBehaviours.LoseControl)
-                        .Average(r => r.differenceFromManouvreTime);
-                    break;
+                        lossOfControlWadd = (float)records
+                            .Average(r => r.timeUntilAlarmRaised);
+
+                        lossOfControlMedianWadd = CalculateMedian(
+                            records.Select(r => r.timeUntilAlarmRaised));
+
+                        lossOfControlAverageDifference = (float)records
+                            .Average(r => r.differenceFromManouvreTime);
+
+                        lossOfControlMedianDifference = CalculateMedian(
+                            records.Select(r => r.differenceFromManouvreTime));
+
+                        break;
+                    }
             }
 
+            // Overall WADD
             overallWadd = (float)OODRecords
                 .Average(r => r.timeUntilAlarmRaised);
 
+            overallMedianWadd = CalculateMedian(
+                OODRecords.Select(r => r.timeUntilAlarmRaised));
+
             overallAverageDifference = (float)OODRecords
                 .Average(r => r.differenceFromManouvreTime);
+
+            overallMedianDifference = CalculateMedian(
+                OODRecords.Select(r => r.differenceFromManouvreTime));
 
             // Update Summary.csv
             UpdateSummaryFile();
 
 
             //Make sure we stop recording after reaching 100
-            if (totalOODManouvres >= 100)
+            if (totalOODManouvres >= 150)
                 RecordWadd = false;
         }
     }
@@ -496,7 +624,15 @@ public class WADDRecorder : MonoBehaviour
 
         // Header
         summaryCsvFile.WriteLine(
-            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Manouvres,WADD (Overall),Average Difference (Overall),Total Brake Manouvres,WADD Brake,Average Difference (Brake),Total Cutting Lane Manouvres,WADD Cutting Lane,Average Difference (Cutting),Total Trail-Off Manouvres,WADD Trail-Off,Average Difference (Trail-Off),Total Zig-Zag Lane Manouvres,WADD Zig-Zag Lane,Average Difference (Zig-Zag Lane),Total Zig-Zag Road Manouvres,WADD Zig-Zag Road,Average Difference (Zig-Zag Road),Total Loss-Of-Control Manouvres,WADD Loss-Of-Control,Average Difference (Loss-Of-Control),Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
+            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method," +
+            "Total Manouvres,WADD (Overall),Median WADD (Overall),Average Difference (Overall),Median Difference (Overall)," +
+            "Total Brake Manouvres,WADD Brake,Median WADD Brake,Average Difference (Brake),Median Difference (Brake)," +
+            "Total Cutting Lane Manouvres,WADD Cutting Lane,Median WADD Cutting Lane,Average Difference (Cutting),Median Difference (Cutting)," +
+            "Total Trail-Off Manouvres,WADD Trail-Off,Median WADD Trail-Off,Average Difference (Trail-Off),Median Difference (Trail-Off)," +
+            "Total Zig-Zag Lane Manouvres,WADD Zig-Zag Lane,Median WADD Zig-Zag Lane,Average Difference (Zig-Zag Lane),Median Difference (Zig-Zag Lane)," +
+            "Total Zig-Zag Road Manouvres,WADD Zig-Zag Road,Median WADD Zig-Zag Road,Average Difference (Zig-Zag Road),Median Difference (Zig-Zag Road)," +
+            "Total Loss-Of-Control Manouvres,WADD Loss-Of-Control,Median WADD Loss-Of-Control,Average Difference (Loss-Of-Control),Median Difference (Loss-Of-Control)," +
+            "Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
 
         // Summary values
         summaryCsvFile.WriteLine(
@@ -504,34 +640,56 @@ public class WADDRecorder : MonoBehaviour
             $"{((predictor.predictionMode == PredictionMode.ADE || predictor.predictionMode == PredictionMode.FDE) ? predictor.cusumNoiseAlignmentEuclidean : predictor.cusumNoiseAlignmentLCSS):F5}," +
             $"{predictor.predictionMode}," +
 
+            // Overall
             $"{totalOODManouvres}," +
             $"{overallWadd:F5}," +
+            $"{overallMedianWadd:F5}," +
             $"{overallAverageDifference:F5}," +
+            $"{overallMedianDifference:F5}," +
 
+            // Brake
             $"{brakeTotal}," +
             $"{brakeWadd:F5}," +
+            $"{brakeMedianWadd:F5}," +
             $"{brakeAverageDifference:F5}," +
+            $"{brakeMedianDifference:F5}," +
 
+            // Cutting
             $"{cuttingTotal}," +
             $"{cuttingWadd:F5}," +
+            $"{cuttingMedianWadd:F5}," +
             $"{cuttingAverageDifference:F5}," +
+            $"{cuttingMedianDifference:F5}," +
 
+            // Trail-Off
             $"{trailOffTotal}," +
             $"{trailOffWadd:F5}," +
+            $"{trailOffMedianWadd:F5}," +
             $"{trailOffAverageDifference:F5}," +
+            $"{trailOffMedianDifference:F5}," +
 
+            // Zig-Zag Lane
             $"{zigZagLaneTotal}," +
             $"{zigZagLaneWadd:F5}," +
+            $"{zigZagLaneMedianWadd:F5}," +
             $"{zigZagLaneAverageDifference:F5}," +
+            $"{zigZagLaneMedianDifference:F5}," +
 
+            // Zig-Zag Road
             $"{zigZagRoadTotal}," +
             $"{zigZagRoadWadd:F5}," +
+            $"{zigZagRoadMedianWadd:F5}," +
             $"{zigZagRoadAverageDifference:F5}," +
+            $"{zigZagRoadMedianDifference:F5}," +
 
+            // Loss-Of-Control
             $"{lossOfControlTotal}," +
             $"{lossOfControlWadd:F5}," +
+            $"{lossOfControlMedianWadd:F5}," +
             $"{lossOfControlAverageDifference:F5}," +
+            $"{lossOfControlMedianDifference:F5}," +
 
+            // Conditions
             $"{(observationNoisePresent ? "True" : "False")}," +
             $"{(observationAnomaliesPresent ? "True" : "False")}," +
             $"{(motionBiasPresent ? "True" : "False")}," +
@@ -540,7 +698,6 @@ public class WADDRecorder : MonoBehaviour
 
         summaryCsvFile.Flush();
     }
-
 
     private int brakeTotal = 0;
     private int cuttingTotal = 0;
@@ -552,6 +709,16 @@ public class WADDRecorder : MonoBehaviour
 
     private float lastOODSimTime = 0.0f;
     
+    class Manouvre
+    {
+        public Manouvre(CarBehaviours type)
+        {
+            typeOfManouvre = type;
+        }
+        CarBehaviours typeOfManouvre;
+        public bool isRecorded = false;
+    }
+    private Manouvre currentManouvre;
     void RecordOODManouvre(CarBehaviours typeOfManouvre)
     {
         if (recordWadd && typeOfManouvre != CarBehaviours.Standard && typeOfManouvre != CarBehaviours.None)
@@ -582,6 +749,7 @@ public class WADDRecorder : MonoBehaviour
                     break;
             }
         }
+        currentManouvre = new Manouvre(typeOfManouvre);
     }
     public void UpdateSimulationTime(float simTime)
     {
@@ -591,6 +759,23 @@ public class WADDRecorder : MonoBehaviour
     public void UpdateLastStableCUSUM()
     {
         lastStableCUSUMTime = simulationTime;
+    }
+
+    private float CalculateMedian(IEnumerable<float> values)
+    {
+        var sortedValues = values.OrderBy(v => v).ToList();
+
+        if (sortedValues.Count == 0)
+            return 0f;
+
+        int middle = sortedValues.Count / 2;
+
+        if (sortedValues.Count % 2 == 0)
+        {
+            return (sortedValues[middle - 1] + sortedValues[middle]) / 2f;
+        }
+
+        return sortedValues[middle];
     }
 
 }

@@ -231,7 +231,7 @@ public class ButtonsController : MonoBehaviour
                 if (nextOODBehaviour != CarBehaviours.Brake)
                 {
                     if (car.lateralState != LaneDefinedMovementQuintic.LateralState.Cruise ||
-                        car.GetTimeSpentCruising() < car.GetLaneSettleDuration())
+                        car.GetTimeSpentCruising() < car.GetLaneSettleDuration() + 0.5f)
                     {
                         readyToTrigger = false;
                     }
@@ -406,11 +406,7 @@ public class ButtonsController : MonoBehaviour
     {
         behaviourBag.Clear();
 
-        //let's test more brakes
         behaviourBag.Add(CarBehaviours.Brake);
-        behaviourBag.Add(CarBehaviours.Brake);
-
-        
         behaviourBag.Add(CarBehaviours.TrailOff);
         behaviourBag.Add(CarBehaviours.ZigZagLane);
         behaviourBag.Add(CarBehaviours.ZigZagRoad);

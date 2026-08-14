@@ -9,6 +9,7 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
     private bool recordAlarms = false;
 
+    private double cusumPeak = 0.0;
 
     public bool RecordAlarms
     {
@@ -28,18 +29,20 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
     private void OnRecordAlarmsChanged()
     {
+        if(!recordAlarms)
+        {
+            EndCsvSession();
+        }
         // Clear old session data
         allTrajectoryRecords.Clear();
         FalseAlarms.Clear();
+        cusumPeak = 0.0;
 
         if (recordAlarms)
         {
             StartNewCsvSession();
         }
-        else
-        {
-            EndCsvSession();
-        }
+
     }
 
     private void StartNewCsvSession()
@@ -59,7 +62,7 @@ public class FalseAlarmRateRecorder : MonoBehaviour
         summaryCsvFile = new StreamWriter(summaryPath, false);
 
         summaryCsvFile.WriteLine(
-            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Trajectories,Total Alarms,False Alarm Rate,Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
+            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Trajectories,Total Alarms,False Alarm Rate,CUSUM Peak,Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
 
         summaryCsvFile.Flush();
 
@@ -98,6 +101,7 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
     private void EndCsvSession()
     {
+        UpdateSummaryFile();
         summaryCsvFile?.Dispose();
         trajectoriesCsvFile?.Dispose();
         alarmsCsvFile?.Dispose();
@@ -263,6 +267,12 @@ public class FalseAlarmRateRecorder : MonoBehaviour
         simulationTime = simTime;
     }
 
+    public void CheckCusumPeak(double currentCusum)
+    {
+        if (currentCusum > cusumPeak)
+            cusumPeak = currentCusum;
+    }
+
 
     private class FalseAlarmRecord
     {
@@ -372,8 +382,8 @@ public class FalseAlarmRateRecorder : MonoBehaviour
                     $"{currentTrajectory.trajectoryStartTime.ToString("F5")}");
 
                 trajectoriesCsvFile.Flush();
-                //keep a maximum of 1000 records
-                if (allTrajectoryRecords.Count > 999)
+                //keep a maximum of 500 records
+                if (allTrajectoryRecords.Count > 499)
                 {
                     RecordAlarms = false;
                 }
@@ -419,16 +429,21 @@ public class FalseAlarmRateRecorder : MonoBehaviour
 
 
         summaryCsvFile.WriteLine(
-            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Trajectories,Total Alarms,False Alarm Rate,Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
+            "CUSUM Threshold,CUSUM Noise Alignment,Error Measure Method,Total Trajectories,Total Alarms,False Alarm Rate,CUSUM Peak,Observation Noise Present,Observation Anomalies Present,Motion Bias Present,Throttle Noise Present,Lane Oscillation Present");
 
 
         summaryCsvFile.WriteLine(
             $"{((predictor.predictionMode == PredictionMode.ADE || predictor.predictionMode == PredictionMode.FDE) ? predictor.OODThresholdEuclidean : predictor.OODThresholdLCSS):F5}," +
-            $"{((predictor.predictionMode == PredictionMode.ADE || predictor.predictionMode == PredictionMode.FDE) ? predictor.cusumNoiseAlignmentEuclidean : predictor.cusumNoiseAlignmentLCSS):F5}," +
+            (
+                (predictor.predictionMode == PredictionMode.ADE || predictor.predictionMode == PredictionMode.FDE)
+                    ? $"{predictor.cusumNoiseAlignmentEuclidean:F5}"
+                    : $"{predictor.cusumNoiseAlignmentLCSS:F5} | {predictor.lcssAcceptanceMagnitude:F5}"
+            ) + "," +
             $"{predictor.predictionMode.ToString()}," +
             $"{totalTrajectories}," +
             $"{totalAlarms}," +
             $"{falseAlarmRate:F5}," +
+            $"{cusumPeak:F5}," +
             $"{(observationNoisePresent ? "True" : "False")}," +
             $"{(observationAnomaliesPresent ? "True" : "False")}," +
             $"{(motionBiasPresent ? "True" : "False")}," +
@@ -522,8 +537,8 @@ public class FalseAlarmRateRecorder : MonoBehaviour
                 }
             }
 
-            //keep a maximum of 1000 records
-            if (allTrajectoryRecords.Count > 999)
+            //keep a maximum of 500 records
+            if (allTrajectoryRecords.Count > 499)
             {
                 RecordAlarms = false;
             }

@@ -162,13 +162,17 @@ public class TrajectoryPredictor : MonoBehaviour
 
             int currentTrajectoryAnchorIndex = FindClosestIndex(currentTrajectory.states, Observations[^1].t);
             int currentTrajectoryMinIndex = FindClosestIndexLowest(currentTrajectory.states, Mathf.Max(0, Observations[^1].t - vehicleController.GetManouvreDuration()));
+
             double currentTrajectoryError = FindErrorMeasure(currentTrajectory, currentTrajectoryAnchorIndex, currentTrajectoryMinIndex, Observations);
+            errorValueField.text = currentTrajectoryError.ToString("F5");
 
             cumulativeErrorSum += currentTrajectoryError;
             if(predictionMode == PredictionMode.ADE || predictionMode == PredictionMode.FDE)
                 cumulativeErrorSum = System.Math.Max(0.0, addObservationNoise ? cumulativeErrorSum - cusumNoiseAlignmentEuclidean : cumulativeErrorSum - cusumNoiseAlignmentEuclidean);
             else if (predictionMode == PredictionMode.LCSS || predictionMode == PredictionMode.LCSSFinal)
                 cumulativeErrorSum = System.Math.Max(0.0, addObservationNoise ? cumulativeErrorSum - cusumNoiseAlignmentLCSS : cumulativeErrorSum - cusumNoiseAlignmentLCSS);
+
+            FARrecorder.CheckCusumPeak(cumulativeErrorSum);
 
 
             latestObservation.recordedCusum = cumulativeErrorSum;
@@ -178,14 +182,9 @@ public class TrajectoryPredictor : MonoBehaviour
                 Debug.Log(currentTrajectoryError);
                 biggestError = (float)currentTrajectoryError;
             }
-            if (currentTrajectoryError > 0 && transitions)
-            {
 
-                //2 Transition to a different, or stay on current trajectory, based on error measure
-                currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, currentTrajectoryAnchorIndex, TransitionTrajectories);
-            }
-            currentTrajectoryError = FindErrorMeasure(currentTrajectory, currentTrajectoryAnchorIndex, currentTrajectoryMinIndex, Observations);
-            errorValueField.text = currentTrajectoryError.ToString("F5");
+
+            
             latestError = currentTrajectoryError;
 
             if (Mathf.Approximately((float)cumulativeErrorSum, 0.0f))
@@ -200,7 +199,7 @@ public class TrajectoryPredictor : MonoBehaviour
                 Debug.Log("OOD Engaged at value: " + cumulativeErrorSum + " and Error: " + currentTrajectoryError);
                 FARrecorder.RecordAlarmTrigger();
                 WADDrecorder.RecordAlarmTrigger();
-                
+
 
                 //generate first ctra traj
                 currentTrajectory = GenerateCTRATrajectory();
@@ -218,6 +217,15 @@ public class TrajectoryPredictor : MonoBehaviour
                 cumulativeErrorSum = 0.0;
 
                 ood = true;
+            }
+            else
+            {
+                if (currentTrajectoryError > 0 && transitions)
+                {
+
+                    //2 Transition to a different, or stay on current trajectory, based on error measure
+                    currentTrajectory = SelectAlikeTrajectory(currentTrajectoryError, currentTrajectoryAnchorIndex, TransitionTrajectories);
+                }
             }
         }
         else
@@ -930,6 +938,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
                 double cusum = 0.0;
 
+                double bestLastError = Mathf.Infinity;
+
                 foreach (var record in topRecords)
                 {
                     // Find where this trajectory begins inside the observation history.
@@ -954,6 +964,8 @@ public class TrajectoryPredictor : MonoBehaviour
 
                     cusum =
                         simulatedObservations[startObservationIndex].recordedCusum ?? 0.0;
+
+                    double lastError = Mathf.Infinity;
 
                     for (int obsIndex = startObservationIndex;
                          obsIndex <= simulatedObservations.Count - 1;
@@ -982,12 +994,16 @@ public class TrajectoryPredictor : MonoBehaviour
                             cusum = System.Math.Max(0.0, addObservationNoise ? cusum - cusumNoiseAlignmentLCSS : cusum - cusumNoiseAlignmentLCSS);
 
                         obs.recordedCusum = cusum;
+                        if(obsIndex == simulatedObservations.Count - 1)
+                        {
+                            lastError = error;
+                        }
                     }
 
                     if (cusum < bestFinalCusum)
                     {
                         bestFinalCusum = cusum;
-
+                        bestLastError = lastError;
                         bestRecord = new TrajectoryRecord
                         {
                             trajectory = record.trajectory,
@@ -1000,6 +1016,7 @@ public class TrajectoryPredictor : MonoBehaviour
 
                 if (bestRecord != null)
                 {
+                    errorValueField.text = bestLastError.ToString("F5");
                     Observations = bestRecord.observations;
                     cumulativeErrorSum = bestFinalCusum;
                     bestTrajectory = bestRecord.trajectory;
@@ -1017,6 +1034,7 @@ public class TrajectoryPredictor : MonoBehaviour
                         bestRecordError = record.error;
                     }
                 }
+                errorValueField.text = bestRecordError.ToString("F5");
                 bestTrajectory = bestRecord.trajectory;
             }
         }

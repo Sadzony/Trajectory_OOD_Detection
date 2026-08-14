@@ -638,7 +638,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Vary Speed via Throttle Noise
+  m_text: Vary Change-Lane Aggresiveness
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1464,7 +1464,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Vary Change-Lane Aggresiveness
+  m_text: Vary Speed via Throttle Noise
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -8553,8 +8553,8 @@ MonoBehaviour:
   intermittedSpeedToggle: {fileID: 1432705421}
   speedChangeMin: 12.5
   speedChangeMax: 20
-  timeToOODMin: 7.75
-  timeToOODMax: 8.5
+  timeToOODMin: 10.25
+  timeToOODMax: 11
 --- !u!1 &1437589378
 GameObject:
   m_ObjectHideFlags: 0
@@ -9602,7 +9602,7 @@ MonoBehaviour:
   - {fileID: 1908850707}
   - {fileID: 9189951290191460299}
   - {fileID: 9189951290191460298}
-  lateralSpeed: 0.725
+  lateralSpeed: 0.425
   rotationStartProgress: 0.7
   firstOffsetDistance: 0.45
   secondOffsetDistance: 1

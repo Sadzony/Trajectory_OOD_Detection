@@ -95,7 +95,7 @@ private float targetCruiseOscillationMagnitude;
 
     public float GetBrakingDeceleration() => brakingDeceleration;
 
-    public float GetLaneSettleDuration() => laneSettleDuration;
+    public float GetLaneSettleDuration() => laneSettleDuration - 0.5f;
 
     public float GetTimeSpentCruising() => timeSpentCruising;
 
